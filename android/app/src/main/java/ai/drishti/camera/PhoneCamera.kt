@@ -28,6 +28,19 @@ class PhoneCamera(
     var isRunning: Boolean = false
         private set
 
+    var lensFacing: Int = CameraSelector.LENS_FACING_BACK
+        private set
+
+    fun switchLens(newLens: Int) {
+        if (lensFacing != newLens) {
+            lensFacing = newLens
+            Log.i(tag, "Switching PhoneCamera lens to: ${if (newLens == CameraSelector.LENS_FACING_FRONT) "FRONT" else "BACK"}")
+            if (isRunning) {
+                bindCameraUseCases()
+            }
+        }
+    }
+
     fun start() {
         if (isRunning) return
 
@@ -50,7 +63,9 @@ class PhoneCamera(
 
     private fun bindCameraUseCases() {
         val provider = cameraProvider ?: return
-        val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+        val cameraSelector = CameraSelector.Builder()
+            .requireLensFacing(lensFacing)
+            .build()
 
         val imageAnalysis = ImageAnalysis.Builder()
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
@@ -76,7 +91,7 @@ class PhoneCamera(
             provider.unbindAll()
             provider.bindToLifecycle(lifecycleOwner, cameraSelector, imageAnalysis)
         } catch (e: Exception) {
-            Log.e(tag, "Use case binding failed", e)
+            Log.e(tag, "Use case binding failed for lens $lensFacing", e)
         }
     }
 
@@ -87,10 +102,17 @@ class PhoneCamera(
         buffer.rewind()
         bitmap.copyPixelsFromBuffer(buffer)
 
-        // Rotate bitmap according to sensor orientation
+        // Rotate bitmap according to sensor orientation & lens
         val rotation = image.imageInfo.rotationDegrees
-        return if (rotation != 0) {
-            val matrix = Matrix().apply { postRotate(rotation.toFloat()) }
+        val matrix = Matrix()
+        if (rotation != 0) {
+            matrix.postRotate(rotation.toFloat())
+        }
+        if (lensFacing == CameraSelector.LENS_FACING_FRONT) {
+            matrix.postScale(-1f, 1f) // Mirror front camera preview for natural display
+        }
+
+        return if (!matrix.isIdentity) {
             Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
         } else {
             bitmap

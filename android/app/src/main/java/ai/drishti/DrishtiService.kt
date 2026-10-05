@@ -26,6 +26,8 @@ import ai.drishti.sensors.FallDetector
 import ai.drishti.sensors.LocationProvider
 import ai.drishti.utils.PreferenceManager
 import ai.drishti.vision.*
+import android.util.Base64
+import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.json.JSONObject
@@ -66,10 +68,15 @@ class DrishtiService : LifecycleService() {
     lateinit var liveKitClient: LiveKitClient
 
     var onVoiceConnectionChanged: ((Boolean) -> Unit)? = null
+    var onCameraSourceChanged: ((CameraSource, message: String) -> Unit)? = null
+    var onFrameForPreview: ((Bitmap) -> Unit)? = null
+
     val isVoiceConnected: Boolean
         get() = ::liveKitClient.isInitialized && liveKitClient.isConnected
 
     private var lastInferenceTimeMs = 0L
+    private var lastFrameSendTimeMs = 0L
+    private var lastPreviewFrameTimeMs = 0L
 
     inner class LocalBinder : Binder() {
         fun getService(): DrishtiService = this@DrishtiService
@@ -237,15 +244,16 @@ class DrishtiService : LifecycleService() {
             context = this,
             lifecycleOwner = this,
             scope = lifecycleScope,
-            onSourceChanged = { _, message ->
+            onSourceChanged = { source, message ->
                 localTTS.speak(message, flush = false)
+                onCameraSourceChanged?.invoke(source, message)
             },
             onFrameProcessed = { bitmap ->
                 handleCameraFrame(bitmap)
             }
         )
 
-        val defaultSource = if (preferenceManager.useEsp32Camera) CameraSource.ESP32_WIFI else CameraSource.PHONE_NATIVE
+        val defaultSource = if (preferenceManager.useEsp32Camera) CameraSource.ESP32_WIFI else CameraSource.PHONE_BACK
         cameraManager.start(defaultSource, preferenceManager.esp32IpAddress)
 
         // LiveKit Client
@@ -290,6 +298,13 @@ class DrishtiService : LifecycleService() {
 
     private fun handleCameraFrame(bitmap: Bitmap) {
         val now = System.currentTimeMillis()
+
+        // 0. Smooth UI preview update (~20 FPS)
+        if (now - lastPreviewFrameTimeMs >= 50L) {
+            lastPreviewFrameTimeMs = now
+            onFrameForPreview?.invoke(bitmap)
+        }
+
         val interval = modeManager.currentConfig.obstacleInferenceIntervalMs
 
         if (now - lastInferenceTimeMs < interval) {
@@ -321,6 +336,32 @@ class DrishtiService : LifecycleService() {
                     liveKitClient.sendData(data.toString())
                 }
             }
+        }
+
+        // 2. Periodically dispatch camera frame to cloud agent (every 3.5s) for instant vision scene Q&A
+        if (now - lastFrameSendTimeMs >= 3500L) {
+            lastFrameSendTimeMs = now
+            sendCameraFrameToAgent(bitmap)
+        }
+    }
+
+    private fun sendCameraFrameToAgent(bitmap: Bitmap) {
+        if (!::liveKitClient.isInitialized || !liveKitClient.isConnected) return
+        try {
+            // Downscale to 480x360 with 55% JPEG compression for low latency WebRTC transfer (~15-20KB)
+            val scaled = Bitmap.createScaledBitmap(bitmap, 480, 360, true)
+            val stream = ByteArrayOutputStream()
+            scaled.compress(Bitmap.CompressFormat.JPEG, 55, stream)
+            val base64 = Base64.encodeToString(stream.toByteArray(), Base64.NO_WRAP)
+            val packet = JSONObject().apply {
+                put("type", "CAMERA_FRAME")
+                put("image_base64", base64)
+                put("timestamp", System.currentTimeMillis())
+            }
+            liveKitClient.sendData(packet.toString())
+            Log.d(tag, "Dispatched camera frame to cloud agent (${base64.length} chars)")
+        } catch (e: Exception) {
+            Log.e(tag, "Failed to send camera frame to agent", e)
         }
     }
 
@@ -402,6 +443,12 @@ class DrishtiService : LifecycleService() {
         try {
             val json = JSONObject(messageJson)
             when (json.optString("type")) {
+                "REQUEST_FRAME" -> {
+                    val frame = cameraManager.latestFrame
+                    if (frame != null) {
+                        sendCameraFrameToAgent(frame)
+                    }
+                }
                 "REQUEST_OCR" -> executeOcrAction("read")
                 "REQUEST_NAVIGATION" -> {
                     val dest = json.optString("destination", "Station")
@@ -435,8 +482,9 @@ class DrishtiService : LifecycleService() {
     fun resumeSubsystems() {
         Log.i(tag, "Resuming Drishti subsystems...")
         try {
-            val defaultSource = if (preferenceManager.useEsp32Camera) CameraSource.ESP32_WIFI else CameraSource.PHONE_NATIVE
+            val defaultSource = if (preferenceManager.useEsp32Camera) CameraSource.ESP32_WIFI else CameraSource.PHONE_BACK
             cameraManager.start(defaultSource, preferenceManager.esp32IpAddress)
+            onCameraSourceChanged?.invoke(cameraManager.activeSource, "Active")
             connectLiveKit()
             fallDetector.start()
             localTTS.speak("Welcome back. Drishti is active.", flush = true)

@@ -13,13 +13,22 @@
     <!-- Action Buttons -->
     <string name="start_service">Start Drishti</string>
     <string name="stop_service">Stop Drishti</string>
-    <string name="switch_camera">Toggle Camera (ESP32 / Phone)</string>
+    <string name="switch_camera">Toggle Camera</string>
+    <string name="switch_camera_to_esp32">Switch: ESP32-CAM 📷</string>
+    <string name="switch_camera_to_phone">Switch: Phone Cam 📱</string>
     <string name="trigger_emergency">Emergency SOS</string>
     <string name="cancel_emergency">Cancel Emergency</string>
 
     <!-- Status -->
-    <string name="camera_status_esp32">Camera: ESP32-CAM (WiFi)</string>
-    <string name="camera_status_phone">Camera: Phone Camera (CameraX)</string>
+    <string name="camera_status_esp32">📷 ESP32-CAM</string>
+    <string name="camera_status_phone_back">📱 Phone (Back)</string>
+    <string name="camera_status_phone_front">🤳 Phone (Front)</string>
+    <string name="camera_status_phone">📱 Phone Camera</string>
+    <string name="camera_subtext_active_phone_back">🟢 Active • Back Lens</string>
+    <string name="camera_subtext_active_phone_front">🟢 Active • Front Lens</string>
+    <string name="camera_subtext_active_esp32">🟢 Active • Wi-Fi Stream</string>
+    <string name="camera_subtext_inactive">⚪ Standby (Start app)</string>
+    <string name="camera_subtext_fallback">⚠️ ESP32 Lost • Using Phone</string>
     <string name="livekit_status_connected">Voice: Connected to Cloud</string>
     <string name="livekit_status_disconnected">Voice: Offline Fallback</string>
 </resources>

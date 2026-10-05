@@ -9,17 +9,20 @@ Handles three primary operational modes:
   4. Emergency (Voice cancellation and dispatch confirmation)
 """
 
+import asyncio
 import json
 import logging
 import os
 import re
 from typing import Any, Dict, Optional, Tuple
 
+import httpx
 from dotenv import load_dotenv
 
 # LiveKit Agents imports
 try:
-    from livekit.agents import AgentSession, JobContext, RoomInputOptions, WorkerOptions, cli
+    from livekit import rtc
+    from livekit.agents import AgentSession, JobContext, RoomInputOptions, WorkerOptions, cli, function_tool
     from livekit.agents.voice import Agent
     from livekit.plugins import google, groq, openai, sarvam, silero
     LIVEKIT_AVAILABLE = True
@@ -41,7 +44,9 @@ class PromptManager:
         "assistant": (
             "You are Drishti, a compassionate, real-time voice companion for a visually impaired user. "
             "Your speech must be concise, direct, and unambiguous. Never use visual references like 'look here'. "
-            "Describe surroundings clearly in 1-2 short sentences. "
+            "Whenever the user asks 'what is in front of me?', 'describe the scene', 'what do you see?', "
+            "or asks about their current surroundings or objects around them, immediately call the describe_scene tool "
+            "to inspect the camera feed and provide a clear, helpful auditory description in 2-3 short sentences. "
             "Mention relative clock directions (e.g., 'at your 2 o'clock') and approximate distances when known. "
             "If an obstacle alert is reported, immediately prioritize safety. "
             "Always maintain a calm, reassuring tone."
@@ -203,10 +208,34 @@ async def entrypoint(ctx: JobContext) -> None:
     )
 
     # ── Configure LLM ──
+    provider = os.getenv("LLM_PROVIDER", "").strip().lower()
+    openai_key = os.getenv("OPENAI_API_KEY")
+    openai_base = os.getenv("OPENAI_BASE_URL")
+    openai_model = os.getenv("OPENAI_MODEL", "gpt-4o").strip()
     groq_key = os.getenv("GROQ_API_KEY")
     google_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
 
-    if groq_key and not groq_key.startswith("...") and len(groq_key.strip()) > 5:
+    def build_openai_llm():
+        kwargs = {"model": openai_model}
+        if openai_key and not openai_key.startswith("..."):
+            kwargs["api_key"] = openai_key
+        if openai_base and not openai_base.startswith("..."):
+            kwargs["base_url"] = openai_base
+        logger.info(f"Using OpenAI LLM ({openai_model}) with base_url={openai_base or 'https://api.openai.com/v1'}")
+        return openai.LLM(**kwargs)
+
+    if provider == "openai":
+        llm_plugin = build_openai_llm()
+    elif provider == "groq" and groq_key and not groq_key.startswith("...") and len(groq_key.strip()) > 5:
+        groq_model = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b").strip()
+        llm_plugin = groq.LLM(model=groq_model)
+        logger.info(f"Using Groq LLM ({groq_model})")
+    elif provider == "google" and google_key and not google_key.startswith("...") and len(google_key) > 10:
+        llm_plugin = google.LLM(model="gemini-2.0-flash")
+        logger.info("Using Google Gemini LLM (gemini-2.0-flash)")
+    elif openai_key and not openai_key.startswith("...") and len(openai_key.strip()) > 10:
+        llm_plugin = build_openai_llm()
+    elif groq_key and not groq_key.startswith("...") and len(groq_key.strip()) > 5:
         groq_model = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b").strip()
         if "llama" in groq_model.lower():
             logger.warning(f"Requested Groq model '{groq_model}' is not active on this API key. Falling back to 'openai/gpt-oss-120b'.")
@@ -217,8 +246,7 @@ async def entrypoint(ctx: JobContext) -> None:
         llm_plugin = google.LLM(model="gemini-2.0-flash")
         logger.info("Using Google Gemini LLM (gemini-2.0-flash)")
     else:
-        llm_plugin = openai.LLM(model="gpt-4o")
-        logger.info("Using OpenAI LLM (gpt-4o)")
+        llm_plugin = build_openai_llm()
 
     # ── Configure TTS ──
     tts_plugin = sarvam.TTS(
@@ -244,9 +272,101 @@ async def entrypoint(ctx: JobContext) -> None:
         vad=vad_plugin,
     )
 
-    # ── Create the Agent with the system prompt ──
+    # ── Real-Time Camera Frame State & Data Channel Listener ──
+    latest_camera_frame: Optional[str] = None
+
+    @ctx.room.on("data_received")
+    def on_data_received(data_packet: rtc.DataPacket):
+        nonlocal latest_camera_frame
+        try:
+            raw_text = data_packet.data.decode("utf-8")
+            payload = json.loads(raw_text)
+            msg_type = payload.get("type")
+            if msg_type == "CAMERA_FRAME":
+                latest_camera_frame = payload.get("image_base64")
+                logger.info("Received fresh camera frame from mobile device")
+            elif msg_type == "OBSTACLE_WARNING":
+                obstacle = payload.get("obstacle", "obstacle")
+                pos = payload.get("position", "ahead")
+                dist = payload.get("distance", "")
+                logger.info(f"Obstacle alert from phone: {obstacle} at {pos} ({dist}m)")
+            elif msg_type == "OCR_RESULT":
+                logger.info(f"OCR text received: {payload.get('text')}")
+        except Exception as err:
+            logger.warning(f"Error handling data packet: {err}")
+
+    async def analyze_frame_with_vision(image_base64: str) -> str:
+        url = f"{openai_base or 'https://api.openai.com/v1'}/chat/completions"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {openai_key}"
+        }
+        image_url = image_base64 if image_base64.startswith("data:") else f"data:image/jpeg;base64,{image_base64}"
+        payload = {
+            "model": openai_model,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": (
+                                "You are Drishti, an assistive voice companion for a visually impaired user. "
+                                "Describe what is directly in front of the camera clearly, concisely, and objectively. "
+                                "Mention key obstacles, pathway clearance, people, objects, and their relative positions "
+                                "(e.g., directly ahead, on your left, on your right). "
+                                "Never say 'in the image' or 'the picture shows'—speak naturally as if viewing through their eyes. "
+                                "Keep your response strictly to 2 to 3 short sentences suitable for text-to-speech."
+                            )
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": image_url}
+                        }
+                    ]
+                }
+            ],
+            "max_tokens": 120
+        }
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(url, json=payload, headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
+            return data["choices"][0]["message"]["content"].strip()
+
+    @function_tool
+    async def describe_scene() -> str:
+        """Call this tool whenever the user asks to describe the scene, what is in front of them, or what the camera sees."""
+        nonlocal latest_camera_frame
+        logger.info("Function tool 'describe_scene' invoked by agent")
+
+        # If no frame cached, ask the mobile phone for a fresh frame
+        if not latest_camera_frame:
+            try:
+                req = json.dumps({"type": "REQUEST_FRAME"}).encode("utf-8")
+                await ctx.room.local_participant.publish_data(req)
+                for _ in range(15):
+                    await asyncio.sleep(0.1)
+                    if latest_camera_frame:
+                        break
+            except Exception as e:
+                logger.warning(f"Failed to request frame from client: {e}")
+
+        if not latest_camera_frame:
+            return "The camera frame is not available yet. Please make sure the Drishti app is open and your phone camera is facing forward, then ask again."
+
+        try:
+            description = await analyze_frame_with_vision(latest_camera_frame)
+            logger.info(f"Vision scene description generated: {description}")
+            return description
+        except Exception as err:
+            logger.error(f"Vision analysis failed: {err}")
+            return "I had trouble analyzing the camera view right now. Please try asking again in a moment."
+
+    # ── Create the Agent with the system prompt and vision tools ──
     agent = Agent(
         instructions=PromptManager.get_prompt(initial_mode),
+        tools=[describe_scene],
     )
 
     # ── Start the session ──

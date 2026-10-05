@@ -235,7 +235,11 @@ class LiveKitClient(
         scope.launch(Dispatchers.IO) {
             try {
                 activeRoom.localParticipant.publishData(jsonString.toByteArray())
-                Log.d(tag, "Sent data packet to agent: $jsonString")
+                if (jsonString.length > 200) {
+                    Log.d(tag, "Sent data packet to agent (${jsonString.length} bytes)")
+                } else {
+                    Log.d(tag, "Sent data packet to agent: $jsonString")
+                }
             } catch (e: Exception) {
                 Log.e(tag, "Failed to send data channel message", e)
             }
