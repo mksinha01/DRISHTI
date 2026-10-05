@@ -1,0 +1,428 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}</style><style>:root{color-scheme:light dark;--md-bg:#fff;--md-text:rgba(0,0,0,.8);--md-muted:rgba(0,0,0,.6);--md-fill:rgba(0,0,0,.04);--md-fill-strong:rgba(0,0,0,.06);--md-rule:rgba(0,0,0,.1);--md-rule-strong:rgba(0,0,0,.16);--md-link:hsl(210 100% 45%)}@media (prefers-color-scheme:dark){:root:where(:not([data-theme="light"])){--md-bg:#0d0d0d;--md-text:rgba(255,255,255,.85);--md-muted:rgba(255,255,255,.6);--md-fill:rgba(255,255,255,.06);--md-fill-strong:rgba(255,255,255,.09);--md-rule:rgba(255,255,255,.14);--md-rule-strong:rgba(255,255,255,.22);--md-link:hsl(210 100% 72%)}}:root[data-theme="dark"]{color-scheme:dark;--md-bg:#0d0d0d;--md-text:rgba(255,255,255,.85);--md-muted:rgba(255,255,255,.6);--md-fill:rgba(255,255,255,.06);--md-fill-strong:rgba(255,255,255,.09);--md-rule:rgba(255,255,255,.14);--md-rule-strong:rgba(255,255,255,.22);--md-link:hsl(210 100% 72%)}:root[data-theme="light"]{color-scheme:light}@media print{:root,:root[data-theme="dark"]{color-scheme:light;--md-bg:#fff;--md-text:rgba(0,0,0,.8);--md-muted:rgba(0,0,0,.6);--md-fill:rgba(0,0,0,.04);--md-fill-strong:rgba(0,0,0,.06);--md-rule:rgba(0,0,0,.1);--md-rule-strong:rgba(0,0,0,.16);--md-link:hsl(210 100% 45%)}}body{background:var(--md-bg);color:var(--md-text);max-width:720px;margin:0 auto;padding:32px;display:flex;flex-direction:column;gap:10px;font:14px/1.55 -apple-system,BlinkMacSystemFont,'SF Pro','Segoe UI',sans-serif;overflow-wrap:break-word}body>:first-child{margin-top:0}h1,h2,h3,h4,h5,h6{margin:6px 0 0;line-height:1.25;font-weight:600;text-wrap:balance}h1{font-size:1.35em}h2{font-size:1.15em;color:var(--md-muted)}h3,h4,h5,h6{font-size:1em}p,ul,ol,blockquote,table,pre,hr{margin:0}strong{font-weight:600}a{color:var(--md-link);text-decoration:none}a:hover{text-decoration:underline}ul,ol{display:flex;flex-direction:column;gap:6px;padding-left:22px}ul{list-style:disc}ol{list-style:decimal}:is(li,td,th)>*+:is(p,ul,ol,blockquote){margin-top:6px}blockquote{display:flex;flex-direction:column;gap:10px;border-left:2px solid var(--md-rule);padding-left:10px;color:var(--md-muted)}:not(pre)>code{background:var(--md-fill);padding:1px 3px;border-radius:4px;font:.92em 'SF Mono',ui-monospace,Menlo,Consolas,monospace}a>code{background:none;color:inherit}pre{background:var(--md-fill);padding:10px 12px;border-radius:6px;overflow-x:auto;font:12px/1.5 'SF Mono',ui-monospace,Menlo,Consolas,monospace;margin-block:4px}pre code{background:none;padding:0;font:inherit}table{width:100%;border-collapse:separate;border-spacing:2px;font:inherit}th,td{padding:6px 8px;border-radius:3px;text-align:left;vertical-align:top}th{background:var(--md-fill-strong);font-weight:600}td{background:var(--md-fill)}:is(th,td) :not(pre)>code{background:transparent}hr{border:0;border-top:1px solid var(--md-rule-strong);margin-block:10px}img{max-width:100%;height:auto;border-radius:4px}</style>
+</head><body>
+<h1>PRD: Drishti — AI Voice Companion for the Visually Impaired</h1>
+<p><strong>Problem Statement:</strong> PS-05 — AI-Powered Assistive System for Visually Impaired People
+<strong>Type:</strong> Hackathon MVP (target build window: ~12 hours), with a phased path to a real product
+<strong>Status:</strong> Draft v3 — final, incorporating feasibility review + production roadmap</p>
+<hr>
+<h2>0. Summary of Decisions</h2>
+<ul>
+<li><strong>Architecture:</strong> ESP32-CAM → WiFi → Laptop (YOLOv8n + face_recognition) → audio output. LiveKit voice agent (STT→LLM→TTS) is a <strong>gated stretch layer</strong>, not the guaranteed path — a fully local, internet-free stack is the non-negotiable fallback.</li>
+<li><strong>Modes:</strong> Navigation (proactive obstacle/hazard alerts) + Assistant (on-demand conversational Q&amp;A, includes face recognition), switched via a physical button (primary) or voice command (secondary).</li>
+<li><strong>Known-people repo check:</strong> an existing repo (<code>agent-starter-embed</code>) was reviewed and found to use Pipecat + Daily.co, not LiveKit. Decision: keep LiveKit as planned; the repo is not part of this build, but stays available as a proven fallback voice stack if LiveKit setup stalls.</li>
+<li><strong>Feasibility review outcome:</strong> several v1 assumptions were corrected — ESP32-CAM needs an external FTDI programmer (no onboard USB), GPIO pin choice for the mode button matters (avoid GPIO16/0/4 and SD-card pins), <code>face_recognition</code>/dlib is officially Mac/Linux only and often fails to <code>pip install</code> on Windows, YOLOv8 is AGPL-3.0 licensed, and LiveKit's real-world latency is commonly 1.4–1.7s, not sub-second. All of this is reflected in the plan below.</li>
+<li><strong>Post-hackathon direction:</strong> this PRD explicitly treats the hackathon build as a validated MVP, not a production system, and lays out a 4-phase path to an eventual mobile product.</li>
+</ul>
+<hr>
+<h2>1. Overview</h2>
+<p>Drishti is a portable assistive system pairing a low-cost camera node (ESP32-CAM, or a laptop webcam as fallback) with local computer vision (YOLOv8n + face_recognition) and audio output. A <strong>local-only pipeline is the guaranteed base</strong>; a LiveKit-powered conversational voice layer is a gated stretch enhancement added only if early proof-of-concept tests succeed.</p>
+<h2>2. Problem Statement</h2>
+<p>Visually impaired individuals face two related challenges navigating unfamiliar environments:</p>
+<ol>
+<li><strong>Reactive hazard awareness</strong> — knowing what's physically in their path before contact.</li>
+<li><strong>Situational understanding</strong> — knowing who/what is around them, on demand.</li>
+</ol>
+<p>Drishti addresses both using local CV, with an optional conversational layer.</p>
+<h2>3. Target User</h2>
+<ul>
+<li>Visually impaired individuals navigating semi-familiar indoor/outdoor environments.</li>
+<li>Secondary: caregivers who may pre-register known faces.</li>
+</ul>
+<h2>4. Goals &amp; Success Metrics (hackathon demo)</h2>
+<table>
+<thead>
+<tr>
+<th>Goal</th>
+<th>Success looks like</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Real-time obstacle awareness</td>
+<td>System announces a new close obstacle/person within a few seconds — exact number set only after POC 1 timing, not assumed upfront</td>
+</tr>
+<tr>
+<td>Known-person recognition</td>
+<td>Correctly distinguishes 2-3 pre-registered faces from strangers under actual demo lighting (POC 3)</td>
+</tr>
+<tr>
+<td>Usable mode switching</td>
+<td>Button press reliably cycles mode with spoken confirmation</td>
+</tr>
+<tr>
+<td>Guaranteed live demo</td>
+<td>The <strong>local-only stack</strong> runs live without any internet dependency, as the non-negotiable fallback</td>
+</tr>
+<tr>
+<td>Stretch: conversational Q&amp;A</td>
+<td>If POC 2 succeeds, user can ask a question and get a spoken answer via LiveKit</td>
+</tr>
+</tbody>
+</table>
+<h2>5. Scope</h2>
+<h3>MUST BUILD (local-only, no internet dependency)</h3>
+<ul>
+<li>ESP32-CAM → WiFi → laptop frame pipeline (fallback: laptop webcam directly, if POC 1 fails)</li>
+<li>YOLOv8n (COCO pretrained) for obstacles/objects/people, running locally on CPU</li>
+<li>Near / medium / far proximity from bounding-box size (not literal &quot;steps&quot; — unverified calibration was dropped)</li>
+<li>Local TTS (pyttsx3/gTTS) — no cloud dependency</li>
+<li>Physical push-button mode switch (Navigation ↔ Assistant), wired to a <strong>non-shared GPIO pin</strong> (13, 14, or 15 — avoid GPIO16, GPIO0, GPIO4, and SD-card pins)</li>
+</ul>
+<h3>SHOULD BUILD — gated stretch layer (only after MUST BUILD is stable)</h3>
+<ul>
+<li>LiveKit Agents voice pipeline (STT→LLM→TTS) for conversational Assistant-mode Q&amp;A — <strong>gated behind POC 2</strong></li>
+<li>Face recognition (<code>face_recognition</code>/dlib) for known vs. unknown people — <strong>gated behind POC 3 and an install test on the actual dev machine's OS</strong></li>
+<li>Voice-command mode switching as a secondary input to the button</li>
+</ul>
+<h3>Explicitly out of scope (12-hour window)</h3>
+<ul>
+<li>Sign/text reading (OCR)</li>
+<li>True on-device inference (removing the laptop dependency) — see Phase 2 roadmap instead</li>
+<li>Haptic feedback</li>
+<li>Precise distance-in-steps calibration</li>
+<li>Multi-person tracking/re-identification</li>
+<li>Any production hardening (auth, scaling, monitoring, privacy compliance)</li>
+</ul>
+<h2>6. System Architecture</h2>
+<pre class="mermaid">flowchart LR
+    A[ESP32-CAM or laptop webcam] -- frames --&gt; B[Laptop: Vision Pipeline]
+    B --&gt; C[YOLOv8n: objects/obstacles/people]
+    B -.optional, gated.-&gt; D[face_recognition: known vs unknown]
+    C --&gt; E[Context Builder]
+    D -.-&gt; E
+    E --&gt; F[Local TTS: pyttsx3/gTTS]
+    F --&gt; G[Speaker/Earphone]
+    E -.optional, gated.-&gt; H[LiveKit Voice Agent]
+    H -.-&gt; I[STT: user voice query, needs mic]
+    H -.-&gt; J[LLM: composes response from context]
+    H -.-&gt; K[TTS: spoken output]
+    K -.-&gt; G
+    L[Push Button on ESP32, safe GPIO pin] -- mode signal --&gt; B
+    B -- mode state --&gt; F
+    B -.-&gt; H
+</pre>
+<p>Solid lines = MUST BUILD path (fully local, no internet). Dotted lines = SHOULD BUILD stretch layer, gated behind POCs 2 and 3.</p>
+<p><strong>Flow (MUST BUILD path):</strong></p>
+<ol>
+<li>Camera (ESP32-CAM or webcam fallback) sends frames to laptop.</li>
+<li>YOLOv8n detects objects/obstacles/people; context builder tracks proximity (near/med/far) and position (left/center/right).</li>
+<li>In Navigation mode, new/close detections trigger a short local TTS announcement, with a cooldown to avoid repetition.</li>
+<li>Button press toggles Navigation ↔ Assistant mode with spoken confirmation.</li>
+</ol>
+<p><strong>Flow (SHOULD BUILD stretch, if POCs pass):</strong>
+5. In Assistant mode, the laptop mic captures a spoken question; LiveKit's STT→LLM→TTS composes an answer using the live detection context, including known/unknown face identity if face recognition passed its POC.</p>
+<h2>7. Feature Details by Mode</h2>
+<h3>Navigation Mode (default, MUST BUILD)</h3>
+<ul>
+<li>Continuously scans frames; announces new obstacles/people via local TTS, prioritized by proximity.</li>
+<li>Cooldown logic prevents re-announcing the same object unless proximity changes materially.</li>
+<li>Example output: <em>&quot;Chair ahead, close.&quot;</em> / <em>&quot;Person approaching, left.&quot;</em></li>
+</ul>
+<h3>Assistant Mode (Q&amp;A, SHOULD BUILD — gated)</h3>
+<ul>
+<li>User asks a question via voice (requires a working microphone — external USB mic recommended if the demo hall is loud).</li>
+<li>LiveKit STT→LLM→TTS composes an answer from live detection context.</li>
+<li>Known-face names surface here if face recognition's POC passed; otherwise generic &quot;a person is here.&quot;</li>
+</ul>
+<h3>Mode Switching</h3>
+<ul>
+<li><strong>Primary:</strong> physical push-button on a confirmed-safe ESP32 GPIO pin — single press cycles mode, spoken confirmation.</li>
+<li><strong>Secondary (stretch):</strong> voice command via LiveKit STT, only if the Assistant-mode layer is built.</li>
+</ul>
+<h2>8. Tech Stack</h2>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Choice</th>
+<th>Note</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Capture hardware</td>
+<td>ESP32-CAM, fallback: laptop webcam</td>
+<td>Requires a separate FTDI/USB-TTL programmer to flash — no built-in USB port</td>
+</tr>
+<tr>
+<td>Comms</td>
+<td>WiFi</td>
+<td>Verify achievable fps on venue network in POC 1 before committing</td>
+</tr>
+<tr>
+<td>Object/obstacle detection</td>
+<td>YOLOv8n (Ultralytics), COCO pretrained</td>
+<td>AGPL-3.0 licensed — fine for a hackathon demo; a paid Enterprise license would be needed to embed it in a closed-source commercial product later</td>
+</tr>
+<tr>
+<td>Face recognition (stretch)</td>
+<td><code>face_recognition</code> (dlib)</td>
+<td>Officially Mac/Linux only; Windows install is unofficial and dlib's pip compile frequently fails without cmake/build tools preinstalled — test on the actual dev machine first</td>
+</tr>
+<tr>
+<td>Local audio output (MUST BUILD)</td>
+<td>pyttsx3 or gTTS</td>
+<td>No internet dependency, no API cost</td>
+</tr>
+<tr>
+<td>Voice agent (stretch)</td>
+<td>LiveKit Agents (STT+LLM+TTS)</td>
+<td>Requires a LiveKit account/server plus separate STT/LLM/TTS provider API keys (or LiveKit Cloud's bundled inference); always internet-dependent; published production latency commonly 1.4–1.7s round trip</td>
+</tr>
+<tr>
+<td>Voice agent — proven fallback reference</td>
+<td>Pipecat + Daily.co (<code>agent-starter-embed</code> repo)</td>
+<td>Not used in this build; kept on hand as a tested fallback if LiveKit setup stalls, since it's a working template the team has run before</td>
+</tr>
+<tr>
+<td>Glue/backend</td>
+<td>Python</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<h2>9. Hardware Checklist</h2>
+<ul>
+<li>ESP32-CAM module</li>
+<li>FTDI/USB-TTL programmer or ESP32-CAM-MB board — required to flash the ESP32-CAM</li>
+<li>Push button wired to a confirmed-safe GPIO pin (13/14/15, not 16/0/4, and not SD-card pins)</li>
+<li>Portable power bank for ESP32</li>
+<li>Laptop (runs YOLOv8n, optionally face_recognition and the LiveKit agent)</li>
+<li>Working microphone (built-in or external USB) — required for Assistant-mode voice queries</li>
+<li>Speaker/earphone for audio output</li>
+<li>Mounting rig (clip/lanyard) for demo portability</li>
+</ul>
+<h2>10. Proof-of-Concept Gate (run these FIRST)</h2>
+<table>
+<thead>
+<tr>
+<th>POC</th>
+<th>Hypothesis</th>
+<th>Test</th>
+<th>Success</th>
+<th>If it fails</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1. Capture pipeline</td>
+<td>ESP32-CAM streams usable frames over venue WiFi</td>
+<td>Run stock CameraWebServer example on-site for 5 min</td>
+<td>≥5fps, no repeated disconnects</td>
+<td>Use laptop webcam as the capture source instead</td>
+</tr>
+<tr>
+<td>2. Voice pipeline latency</td>
+<td>LiveKit STT→LLM→TTS completes in a usable time</td>
+<td>Build minimal LiveKit &quot;hello world&quot; agent, time 10 round trips</td>
+<td>Consistent, acceptable latency for a live demo</td>
+<td>Drop LiveKit; use local TTS only, no conversational Q&amp;A (or fall back to the Pipecat/Daily.co repo if time allows)</td>
+</tr>
+<tr>
+<td>3. Face recognition accuracy</td>
+<td>3 known faces distinguishable from strangers</td>
+<td>Register 3 faces, test on 10 photos in demo lighting</td>
+<td>≥8/10 correct</td>
+<td>Drop identity claims; keep generic &quot;person detected&quot; from YOLO</td>
+</tr>
+</tbody>
+</table>
+<h2>11. 12-Hour Build Timeline</h2>
+<table>
+<thead>
+<tr>
+<th>Time</th>
+<th>Milestone</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0–1h</td>
+<td>Run POC 1 (capture) and POC 2 (voice latency) in parallel if team splits; decide fallback paths immediately</td>
+</tr>
+<tr>
+<td>1–3h</td>
+<td>Local pipeline: camera → YOLOv8n → proximity classification working</td>
+</tr>
+<tr>
+<td>3–4h</td>
+<td>Local TTS wired to detections; Navigation mode cooldown/anti-spam logic</td>
+</tr>
+<tr>
+<td>4–5h</td>
+<td>Button wired to a confirmed-safe GPIO pin; mode-switch logic + spoken confirmation</td>
+</tr>
+<tr>
+<td>5–6h</td>
+<td><strong>Decision checkpoint:</strong> is the local-only MUST BUILD stack demo-ready? If yes, this is your guaranteed fallback — protect it from further changes</td>
+</tr>
+<tr>
+<td>6–7h</td>
+<td>Run POC 3 (face recognition); only proceed if it passes</td>
+</tr>
+<tr>
+<td>7–9h</td>
+<td>If POC 2 passed: build LiveKit Assistant-mode Q&amp;A on top of the working local stack</td>
+</tr>
+<tr>
+<td>9–10h</td>
+<td>Integrate face recognition into Assistant-mode context, if POC 3 passed</td>
+</tr>
+<tr>
+<td>10–11h</td>
+<td>Voice-command mode switching (stretch), only if time remains</td>
+</tr>
+<tr>
+<td>11–12h</td>
+<td>End-to-end rehearsal on the local-only fallback path first, then the full stack</td>
+</tr>
+</tbody>
+</table>
+<h2>12. Critical Risks &amp; Fallbacks</h2>
+<pre><code>LiveKit voice agent           →  if setup/latency fails  →  Local TTS only, canned phrases (or Pipecat/Daily.co repo)
+face_recognition (dlib)       →  if install fails          →  Generic &#34;person detected&#34; (from YOLO)
+ESP32-CAM WiFi streaming      →  if unstable at venue       →  Laptop webcam as capture source
+Venue internet (for LiveKit)  →  if unavailable             →  Full local-only stack, zero cloud dependency
+</code></pre>
+<p><strong>Principle:</strong> the demo must never depend on a single fragile, internet-dependent component.</p>
+<h2>13. Risks &amp; Mitigations</h2>
+<table>
+<thead>
+<tr>
+<th>Risk</th>
+<th>Mitigation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>WiFi latency/instability between ESP32 and laptop</td>
+<td>Same local hotspot; reduce resolution/frame rate; webcam fallback</td>
+</tr>
+<tr>
+<td>LiveKit + LLM latency/setup overrun for a team without prior LiveKit experience</td>
+<td>Gate behind POC 2; treat as stretch, not core; Pipecat/Daily.co repo as a tested backup</td>
+</tr>
+<tr>
+<td>dlib/face_recognition install failure, especially on Windows</td>
+<td>Test on actual dev machine before committing; generic-person fallback</td>
+</tr>
+<tr>
+<td>No FTDI programmer on hand</td>
+<td>Acquire before the hackathon — no in-hackathon fallback for this</td>
+</tr>
+<tr>
+<td>Time overrun on integration</td>
+<td>Build and test each piece independently (POCs); keep local-only fallback always demoable</td>
+</tr>
+</tbody>
+</table>
+<h2>14. Path to a Real Product (post-hackathon)</h2>
+<p>The hackathon build is a <strong>validated MVP, not a production system</strong>. Presenting it this way — with an explicit roadmap — is also the stronger pitch framing, since claiming &quot;production ready&quot; invites scrutiny the hackathon build can't yet survive.</p>
+<h3>Phase 1 — Hackathon MVP (this PRD)</h3>
+<p>ESP32-CAM + laptop brain, local-only fallback guaranteed, LiveKit as a gated stretch. Goal: prove the concept works, not ship it.</p>
+<h3>Phase 2 — Mobile prototype</h3>
+<ul>
+<li>Re-export YOLOv8n to TFLite (Android) / CoreML (iOS) and validate real on-device inference speed on actual phones, not just laptop CPU</li>
+<li>Replace <code>face_recognition</code>/dlib entirely — it does not run on mobile — with a mobile-compatible pipeline (e.g. Google ML Kit face detection + a TFLite embedding model such as MobileFaceNet)</li>
+<li>Replace local TTS with native platform TTS (Android TextToSpeech / iOS AVSpeechSynthesizer)</li>
+<li>If keeping the ESP32-CAM, build a real WiFi provisioning flow (BLE setup or captive-portal AP mode) instead of a hardcoded SSID/password — or drop the ESP32 in favor of the phone's own camera</li>
+<li>LiveKit's mobile SDKs (Swift/Kotlin/Flutter) are a genuine, supported swap for the laptop-based agent client at this stage</li>
+</ul>
+<h3>Phase 3 — Pilot with real users</h3>
+<ul>
+<li>Test with actual visually impaired users in real environments over weeks, not a demo hall</li>
+<li>Collect structured feedback on false negatives/positives — a missed obstacle here is a safety issue, not a bug ticket</li>
+<li>Gather real battery, comfort, and reliability data from daily use</li>
+</ul>
+<h3>Phase 4 — Production</h3>
+<ul>
+<li>Only after Phase 3 feedback is addressed</li>
+<li>Privacy/data handling review for camera footage and face data (of both the user and bystanders)</li>
+<li>Reliability hardening, support processes, and an honest look at what regulatory or duty-of-care expectations apply to a safety-relevant assistive device in your target market</li>
+<li>iOS background execution restrictions and battery/thermal limits need real engineering solutions, not just &quot;it runs&quot; in a demo</li>
+</ul>
+<h2>15. Licensing Notes</h2>
+<ul>
+<li>YOLOv8 (Ultralytics): AGPL-3.0. Fine for a hackathon demo; a commercial closed-source product would need an Ultralytics Enterprise license.</li>
+<li><code>face_recognition</code>: MIT, but depends on dlib (Boost Software License) — the licensing isn't the blocker, the Windows install friction is.</li>
+<li>LiveKit server: Apache 2.0.</li>
+</ul>
+
+
+<!--claude-mermaid-runtime-begin:3477-->
+<style>.mermaid-diagram{margin-block:4px}.mermaid-diagram svg{display:block;margin:0 auto;max-width:100%;height:auto}</style>
+<script src="/_runtime/mermaid-11.16.1.min.js"></script>
+<script>(function(){
+var CFG={"palettes":{"light":{"surface":"#f4efe4","text":"#42392e","line":"#8a7f6d","border":"#7a6c52","bg":"#fffdf8"},"dark":{"surface":"#262b34","text":"#f2f3f5","line":"#a8adb8","border":"#9aa4b8","bg":"#1f232b"}}};
+if(typeof mermaid==='undefined')return;
+var pres=Array.prototype.slice.call(document.querySelectorAll('pre.mermaid')).filter(function(p){if(p.hasAttribute('data-claude-mermaid-claimed'))return false;p.setAttribute('data-claude-mermaid-claimed','1');return true;});
+if(!pres.length)return;
+var mq=window.matchMedia?window.matchMedia('(prefers-color-scheme: dark)'):null;
+var root=document.documentElement;
+var items=pres.map(function(pre){
+var mount=document.createElement('div');mount.className='mermaid-diagram';
+return {pre:pre,mount:mount,src:pre.textContent||''};
+});
+var seq=0;
+var renderGen=0;
+var lastKey='';
+function pageBg(fallback){
+var els=[document.body,document.documentElement];
+for(var i=0;i<els.length;i++){
+var c=els[i]&&getComputedStyle(els[i]).backgroundColor;
+if(c&&c!=='transparent'&&c!=='rgba(0, 0, 0, 0)')return c;
+}
+return fallback;
+}
+function render(){
+var theme=root.getAttribute('data-theme');
+var dark=theme==='dark'||(!!(mq&&mq.matches)&&theme!=='light');
+var pal=dark?CFG.palettes.dark:CFG.palettes.light;
+var bg=pageBg(pal.bg);
+var key=(dark?'d':'l')+'|'+bg;
+if(key===lastKey)return;
+lastKey=key;
+var gen=++renderGen;
+var font=getComputedStyle(document.body).fontFamily||'sans-serif';
+var nat={useMaxWidth:false};
+mermaid.initialize({
+startOnLoad:false,securityLevel:'strict',theme:'base',
+flowchart:nat,sequence:nat,er:nat,state:nat,class:nat,pie:nat,
+gantt:nat,journey:nat,timeline:nat,gitGraph:nat,mindmap:nat,xyChart:nat,
+quadrantChart:nat,sankey:nat,c4:nat,requirement:nat,block:nat,
+packet:nat,kanban:nat,architecture:nat,radar:nat,
+themeVariables:{background:bg,mainBkg:pal.surface,primaryColor:pal.surface,
+primaryTextColor:pal.text,lineColor:pal.line,primaryBorderColor:pal.border,
+nodeBorder:pal.border,clusterBorder:pal.border,edgeLabelBackground:bg,
+clusterBkg:'rgba(127,127,127,0.07)',titleColor:pal.text,
+darkMode:dark,rowOdd:bg,rowEven:'rgba(127,127,127,0.07)',
+attributeBackgroundColorOdd:bg,attributeBackgroundColorEven:'rgba(127,127,127,0.07)',
+fontSize:'16px',fontFamily:font},
+themeCSS:'.node rect, .node circle, .node polygon, .node path, .cluster rect { stroke-width: 2px; }'
+});
+items.forEach(function(it){
+var id='claude-mermaid-'+seq++;
+mermaid.render(id,it.src).then(function(r){
+if(gen!==renderGen)return;
+var prev=it.pre.previousElementSibling;
+if(prev&&prev.className==='mermaid-diagram'&&prev!==it.mount)return;
+it.mount.innerHTML=r.svg;
+if(!it.mount.parentNode)it.pre.parentNode.insertBefore(it.mount,it.pre);
+it.pre.style.display='none';
+},function(){
+var scratch=document.getElementById(id);
+if(scratch)scratch.parentNode.removeChild(scratch);
+scratch=document.getElementById('d'+id);
+if(scratch)scratch.parentNode.removeChild(scratch);
+if(gen!==renderGen)return;
+if(it.mount.parentNode)it.mount.parentNode.removeChild(it.mount);
+it.pre.style.display='';
+});
+});
+}
+render();
+if(mq&&mq.addEventListener)mq.addEventListener('change',render);
+if(typeof MutationObserver!=='undefined')new MutationObserver(render).observe(root,{attributes:true,attributeFilter:['data-theme']});
+})();</script>
+<!--claude-mermaid-runtime-end-->
+</body></html>

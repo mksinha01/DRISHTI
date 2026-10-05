@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- High-Contrast Accessible Theme Colors -->
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="dark_background">#FF121212</color>
+    <color name="dark_surface">#FF1E1E1E</color>
+    <color name="primary_accent">#FF00E5FF</color> <!-- High-visibility Cyan -->
+    <color name="secondary_amber">#FFFFB300</color> <!-- Warning Amber -->
+    <color name="alert_red">#FFFF1744</color> <!-- High-visibility Alert Red -->
+    <color name="success_green">#FF00E676</color>
+    <color name="text_high_contrast">#FFFFFFFF</color>
+    <color name="text_medium_contrast">#B3FFFFFF</color>
+</resources>

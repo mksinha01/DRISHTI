@@ -1,0 +1,25 @@
+<resources>
+    <string name="app_name">Drishti</string>
+    <string name="app_description">AI Voice Companion for Visually Impaired</string>
+    <string name="service_notification_title">Drishti is active</string>
+    <string name="service_notification_text">Monitoring obstacles and listening for voice commands</string>
+
+    <!-- Modes -->
+    <string name="mode_assistant">Assistant Mode</string>
+    <string name="mode_navigation">Navigation Mode</string>
+    <string name="mode_ocr">Reading Mode</string>
+    <string name="mode_emergency">Emergency Mode</string>
+
+    <!-- Action Buttons -->
+    <string name="start_service">Start Drishti</string>
+    <string name="stop_service">Stop Drishti</string>
+    <string name="switch_camera">Toggle Camera (ESP32 / Phone)</string>
+    <string name="trigger_emergency">Emergency SOS</string>
+    <string name="cancel_emergency">Cancel Emergency</string>
+
+    <!-- Status -->
+    <string name="camera_status_esp32">Camera: ESP32-CAM (WiFi)</string>
+    <string name="camera_status_phone">Camera: Phone Camera (CameraX)</string>
+    <string name="livekit_status_connected">Voice: Connected to Cloud</string>
+    <string name="livekit_status_disconnected">Voice: Offline Fallback</string>
+</resources>
