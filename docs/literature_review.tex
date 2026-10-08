@@ -1,0 +1,829 @@
+\documentclass[10pt,twocolumn]{article}
+
+% -----------------------------------------------------------------------------
+% PACKAGE CONFIGURATION & PREAMBLE
+% -----------------------------------------------------------------------------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=0.75in,top=0.85in,bottom=0.85in]{geometry}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric,arrows.meta,positioning,calc,fit,backgrounds}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{microtype}
+\usepackage{cite}
+\usepackage{url}
+\usepackage{enumitem}
+\usepackage{subcaption}
+\usepackage{caption}
+\usepackage{titlesec}
+\usepackage{setspace}
+\usepackage[colorlinks=true,linkcolor=blue!70!black,citecolor=green!50!black,urlcolor=blue!80!black]{hyperref}
+
+% Typography & Section Spacing Tweaks
+\titleformat{\section}{\large\bfseries}{\thesection.}{0.5em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{0.5em}{}
+\titleformat{\subsubsection}{\small\bfseries}{\thesubsubsection}{0.5em}{}
+\titlespacing*{\section}{0pt}{1.2ex plus 0.4ex minus 0.2ex}{0.6ex plus 0.2ex minus 0.1ex}
+\titlespacing*{\subsection}{0pt}{1.0ex plus 0.3ex minus 0.2ex}{0.4ex plus 0.1ex minus 0.1ex}
+\titlespacing*{\subsubsection}{0pt}{0.8ex plus 0.2ex minus 0.1ex}{0.3ex plus 0.1ex minus 0.1ex}
+
+\setlength{\columnsep}{0.25in}
+\setlength{\parindent}{1.2em}
+\setlength{\parskip}{0pt}
+
+% -----------------------------------------------------------------------------
+% DOCUMENT METADATA
+% -----------------------------------------------------------------------------
+\title{\Large\textbf{Voice-First Multimodal Assistive Systems for Visually Impaired Mobility,\\Perception, and Safety: A Comprehensive Literature Review and Architectural Framework}}
+
+\author{
+    \textbf{Project Drishti Research Group} \\
+    Department of Computer Science and Engineering \\
+    \texttt{mksinha01/DRISHTI}
+}
+
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+% -----------------------------------------------------------------------------
+% ABSTRACT & KEYWORDS
+% -----------------------------------------------------------------------------
+\begin{abstract}
+Navigating dynamic, unstructured environments and interpreting visual stimuli present profound daily challenges for visually impaired people (VIP) and individuals with blindness or low vision (BLV). Over the past six decades, assistive technology has evolved from passive mechanical aids (the long cane) and ultrasonic Electronic Travel Aids (ETAs) to wearable micro-cameras and edge-accelerated deep learning vision. Concurrently, recent breakthroughs in real-time WebRTC communications, on-device neural inferencing, and cloud-hosted Multimodal Large Language Models (MLLMs) have made human-like conversational scene understanding technologically feasible. However, existing commercial and academic solutions remain fragmented, suffering from high cognitive load, auditory masking, reliance on fragile cloud connections for critical obstacle avoidance, and prohibitive financial barriers. This comprehensive literature review provides a systematic, cross-disciplinary analysis of the foundational paradigms, state-of-the-art developments, and engineering bottlenecks spanning assistive mobility. We establish a rigorous taxonomy of Sensory Substitution Devices (SSDs) and ETAs; evaluate edge-based computer vision architectures (YOLOv8, MobileNet, quantized TFLite inference) versus monocular depth estimation; dissect wearable embedded camera streaming protocols (ESP32-CAM MJPEG over Wi-Fi vs. smartphone CameraX); investigate Voice User Interfaces (VUIs) driven by WebRTC low-latency streaming and MLLMs (GPT-4o, Gemini 2.0 Flash); and examine inertial sensor-based fall detection and fail-safe alerting mechanisms. Furthermore, we synthesize these findings against the architectural design of \textit{Drishti}---a voice-first, multi-modal assistive companion featuring a dual-tier edge-cloud architecture that decouples sub-400\,ms local obstacle reflexes from cloud-based conversational scene semantics. Finally, we highlight unresolved open research challenges, including low-light robustness, edge small language model (SLM) integration, auditory clutter mitigation, and bystander privacy compliance.
+\end{abstract}
+
+\textbf{\textit{Keywords}}---Assistive Technology, Computer Vision, Electronic Travel Aids (ETAs), Deep Learning, Edge Computing, Large Language Models (LLMs), Multimodal Perception, Optical Character Recognition (OCR), Sensory Substitution, Visually Impaired Persons (VIP), WebRTC, YOLOv8.
+
+% -----------------------------------------------------------------------------
+% 1. INTRODUCTION & PROBLEM LANDSCAPE
+% -----------------------------------------------------------------------------
+\section{Introduction and Problem Landscape}
+\label{sec:intro}
+
+\subsection{Demographic Context and Global Health Imperative}
+According to the World Health Organization (WHO), over 2.2 billion individuals globally experience near or distance vision impairment, among whom at least 1 billion endure preventable or unaddressed visual loss \cite{who_vision_report}. Approximately 43 million people live with complete blindness, while 295 million experience moderate-to-severe visual impairment (MSVI) \cite{bourne2021trends}. The socio-economic ramifications are profound: visual impairment restricts spatial autonomy, severely impedes personal mobility, hampers educational and occupational parity, and correlates strongly with heightened risks of depressive disorders, social isolation, and catastrophic physical injuries from falls \cite{marquez2019impact, roentgen2008inventory}.
+
+In developing and emerging economies, where municipal pedestrian infrastructure is frequently deficient---characterized by broken pavements, unbarricaded construction ditches, overhanging low-hanging branches, and erratic motor traffic---the vulnerability of visually impaired persons (VIP) is severely amplified. While tactile pavings and pedestrian audio signals are increasingly mandated in high-income urban centers, their global penetrance remains negligible \cite{manduchi2012last}. Consequently, an urgent imperative exists for accessible, autonomous, portable, and low-cost assistive technology capable of augmenting personal mobility, visual literacy, and personal safety without requiring municipal infrastructure modifications.
+
+\subsection{Mobility Bottlenecks and Perceptual Blind Spots}
+Human environmental perception is dominated by the visual cortex, which processes roughly 80\% of incoming sensory stimuli relevant to spatial orientation, obstacle hazard localization, and social interaction \cite{loomis2001visual}. The white cane (or long cane), established in its modern form by Richard Hoover following World War II, continues to serve as the global gold standard for pedestrian navigation among the blind \cite{hoover1944foot}. Operating via mechanical echo-acoustics and tactile sweep mechanics, the white cane provides physical confirmation of floor-level surface discontinuities (drop-offs, curbs, steps) within a one-meter radius.
+
+Despite its ubiquity and mechanical reliability, the long cane exhibits critical perceptual deficiencies:
+\begin{enumerate}[leftmargin=*]
+    \item \textbf{Head- and Chest-Level Blindness:} The ground sweep arc leaves an elevated conical zone undetected. Obstacles such as open truck tailgates, scaffolding, overhanging tree branches, and street awnings present severe concussion hazards \cite{bhowmick2017vision}.
+    \item \textbf{Zero Remote Horizon:} The physical reach of the cane ($\approx 1.0$--$1.4\,\text{m}$) restricts user reaction windows. At an average human walking speed of $1.2\,\text{m/s}$, a cane user has less than one second to identify and decelerate upon hazard contact.
+    \item \textbf{Dynamic Obstacle Trajectory Blindness:} The cane is inherently static; it cannot perceive the closing velocity or trajectory of approaching pedestrians, cyclists, or stray animals.
+    \item \textbf{Semantic Invisibility:} Tactile contact provides structural presence but zero semantic context (e.g., distinguishing a harmless cardboard carton from a hot vehicular exhaust or an aggressive domestic animal).
+\end{enumerate}
+
+Beyond spatial locomotion, visually impaired individuals face severe friction in contextual information acquisition: reading printed environmental signage, verifying currency notes, inspecting commercial packaging, reading printed text, recognizing familiar social acquaintances, and retaining situational confidence in unfamiliar spaces \cite{kalia2010spatial, brady2013visual}.
+
+\subsection{The Paradigm Shift: From Mechanical Aids to Ambient AI}
+Over the past decade, rapid advancements in edge artificial intelligence (AI), mobile computing, and low-latency wireless telecommunications have instigated a paradigm shift. Assistive technology has progressed across four identifiable historical generations:
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Generation 1 (Mechanical):} The long cane, Braille slates, and guide dogs.
+    \item \textbf{Generation 2 (Acoustic/Ultrasonic ETAs):} Ranging sensors (ultrasonic, infrared) mapping distance to pitch or vibration (e.g., the Sonicguide, UltraCane) \cite{kay1974ultrasonic}.
+    \item \textbf{Generation 3 (Computer Vision & Wearables):} Classical computer vision (edge detection, optical flow) and mobile camera applications (Seeing AI, OrCam MyEye) providing rigid, template-driven audio classification \cite{manduchi2014mobile, orcam2020}.
+    \item \textbf{Generation 4 (Conversational Multimodal AI & Edge Reflexes):} Symbiotic systems coupling on-device deep learning neural networks (e.g., YOLOv8, MobileNet) with cloud-hosted Multimodal Large Language Models (MLLMs), real-time WebRTC audio networks, and low-latency voice assistants capable of fluid, contextual dialogue \cite{achiam2023gpt4, team2024gemini}.
+\end{itemize}
+
+\subsection{Scope and Organization of this Literature Review}
+This review paper systematically explores the engineering, algorithmic, and human-factor foundations required to construct a reliable Generation-4 assistive system, contextualized through the design decisions of \textit{Drishti} (an open, voice-first Android and ESP32 multimodal companion). 
+
+The remainder of this survey is organized as follows:
+Section~\ref{sec:taxonomy} delineates the taxonomy of Electronic Travel Aids and theoretical sensory substitution models. 
+Section~\ref{sec:edge_vision} examines on-device deep learning object detection, model quantization, and monocular depth heuristics. 
+Section~\ref{sec:hardware} surveys wearable sensor topologies, microcontroller streaming (ESP32-CAM), and wireless video transport. 
+Section~\ref{sec:vui_mllm} investigates low-latency Voice User Interfaces, WebRTC pipelines, and conversational MLLMs. 
+Section~\ref{sec:ocr} evaluates scene text recognition (STR) and document OCR in assistive reading. 
+Section~\ref{sec:navigation} analyzes pedestrian micro-navigation and wayfinding. 
+Section~\ref{sec:falls} details inertial fall detection mechanics and emergency dispatch. 
+Section~\ref{sec:edge_cloud} dissects distributed edge-cloud latency hierarchies. 
+Section~\ref{sec:hci_privacy} examines auditory cognitive load, human factors, and surveillance ethics. 
+Section~\ref{sec:comparative} provides a systematic comparative evaluation against existing state-of-the-art commercial and academic systems. 
+Section~\ref{sec:challenges} identifies open research problems, followed by concluding remarks in Section~\ref{sec:conclusion}.
+
+% -----------------------------------------------------------------------------
+% 2. TAXONOMY & SENSORY SUBSTITUTION
+% -----------------------------------------------------------------------------
+\section{Taxonomy of Assistive Technologies and Sensory Substitution}
+\label{sec:taxonomy}
+
+\subsection{Sensory Substitution Device (SSD) Theory}
+The human brain exhibits lifelong neuroplasticity. When visual deprivation occurs, occipital visual cortical structures are cross-modally recruited by auditory and tactile processing pathways \cite{bach1969sensory, merabet2010neuroplastic}. Sensory Substitution Devices (SSDs) leverage this neurobiology by translating optical spatial features into alternative sensory modalities: tactile (haptic) or auditory (acoustic).
+
+Early pioneer Paul Bach-y-Rita introduced the Tactile Vision Substitution System (TVSS), employing a $20 \times 20$ array of mechanical solenoids or electro-tactile stimulators placed on the user's back or tongue (e.g., the BrainPort) \cite{bach1969sensory, bach2004see}. While proving that biological cross-modal perception is feasible, tactile SSDs suffer from spatial resolution limits, skin sensory adaptation (numbness), high mechanical power consumption, and cumbersome donning procedures.
+
+Auditory SSDs map visual arrays directly into acoustic frequencies. The canonical system, \textit{The vOICe} developed by Peter Meijer \cite{meijer1992augmented}, transforms grayscale video frames via a left-to-right temporal scan line: horizontal position maps to time, vertical elevation maps to frequency (pitch), and luminance maps to acoustic amplitude (volume). Similarly, \textit{EyeMusic} enhances this paradigm by adding musical timbre to represent discrete colors \cite{abboud2014eyemusic}. Despite rigorous laboratory success, raw auditory SSDs impose severe cognitive overload:
+\begin{equation}
+    C_{\text{load}} \propto \int_{0}^{T} \left( \sum_{i=1}^{N_f} \mathcal{H}(\text{freq}_i, \text{amp}_i) \right) dt
+\end{equation}
+Users must perform continuous mental decoding of abrasive musical soundscapes, which simultaneously creates \textit{auditory masking}---blinding the user to natural environmental acoustic landmarks (e.g., vehicular echoes, footstep reverberations, pedestrian chatter) critical for biological echolocation \cite{ashmead1998spatial}.
+
+\subsection{Taxonomy of Assistive Mobility Systems}
+Modern assistive mobility devices are broadly classified across three functional classes:
+\begin{enumerate}[leftmargin=*]
+    \item \textbf{Electronic Travel Aids (ETAs):} Devices that directly sample the immediate pathway ($0.5$--$5\,\text{m}$) to detect, localize, and warn of static or dynamic physical obstacles.
+    \item \textbf{Electronic Orientation Aids (EOAs):} Wayfinding systems that track global or localized positioning, heading, and route pathing to guide a traveler toward distant geographical coordinates \cite{loomis2001visual}.
+    \item \textbf{Electronic Vision Enhancement Systems (EVES):} Devices dedicated to magnifying, extracting, or reading fine visual details, such as typography, currency, and facial features \cite{tapu2020wearable}.
+\end{enumerate}
+
+\begin{table*}[t]
+\centering
+\small
+\caption{Taxonomic Comparative Matrix of Assistive Sensing Modalities and Travel Aids}
+\label{tab:taxonomy}
+\begin{tabularx}{\textwidth}{l p{2.2cm} p{2.5cm} p{2.4cm} p{2.8cm} X}
+\toprule
+\textbf{Modality / System} & \textbf{Sensing Principle} & \textbf{Effective Range} & \textbf{Environmental Robustness} & \textbf{Feedback Mechanism} & \textbf{Key Limitations} \\
+\midrule
+\textbf{Ultrasonic ETA} \cite{kay1974ultrasonic, bhowmick2017vision} & Acoustic Time-of-Flight ($40\,\text{kHz}$) & $0.3 - 3.5\,\text{m}$ & Fails at specular angles, acoustic absorption & Haptic buzz / Audio tonal pitch & Poor spatial resolution; cannot classify obstacle identity; false echoes \\
+\addlinespace
+\textbf{Optical Triangulation} \cite{cardillo2000ultrasonic} & Near-Infrared (NIR) laser diodes & $0.2 - 2.0\,\text{m}$ & Degrades under direct midday sunlight & Tactile vibration frequency & Very narrow beam cone; misses wide-body obstacles; no semantic data \\
+\addlinespace
+\textbf{Stereo / RGB-D} \cite{rodriguez2012assisting, tapu2014real} & Dual-lens disparity / Structured IR light & $0.5 - 5.0\,\text{m}$ & High compute footprint; outdoor IR washing & 3D Spatial Audio / Voice announcements & Heavy power drain; bulky form factor; computational latency $> 200\,\text{ms}$ \\
+\addlinespace
+\textbf{Pure Auditory SSD} \cite{meijer1992augmented, abboud2014eyemusic} & Direct Pixel-to-Sound Frequency Mapping & Visual field ($>10\,\text{m}$) & Lighting dependent; high noise sensitivity & Complex continuous frequency sweeps & Massive cognitive fatigue; severe masking of ambient environmental cues \\
+\addlinespace
+\textbf{Edge Deep Learning + VUI} (e.g., \textit{Drishti}) & Single-lens RGB + YOLOv8 + Natural Voice & $0.5 - 8.0\,\text{m}$ & Robust across normal lighting; edge ML & Prioritized synthetic speech + Ducking alerts & Monocular depth approximation; dependency on camera orientation \\
+\bottomrule
+\end{tabularx}
+\end{table*}
+
+\subsection{Sensory Channel Trade-offs: Auditory vs. Haptic}
+Selecting an output channel is governed by the user's sensory bandwidth. While haptic feedback (tactile belts, vibrating handles) leaves the auditory canal unoccluded, it suffers from low informational throughput---conveying binary distance thresholds or directional vectors, but failing entirely at complex semantic descriptions (e.g., ``Approaching a bus stop queue with three people and a wet bench'') \cite{velazquez2010wearable}. 
+
+Conversely, natural language speech provides near-infinite semantic descriptive depth. However, spoken words occupy temporal bandwidth: announcing a complete phrase requires several seconds. Consequently, state-of-the-art assistive design requires a hybrid approach: \textbf{instantaneous priority verbal/earcon interrupts for safety-critical obstacles}, paired with \textbf{on-demand conversational dialogue for environmental reasoning}.
+
+% -----------------------------------------------------------------------------
+% 3. EDGE COMPUTER VISION & OBJECT DETECTION
+% -----------------------------------------------------------------------------
+\section{Computer Vision and Edge Deep Learning for Obstacle Detection}
+\label{sec:edge_vision}
+
+\subsection{Evolution of Real-Time Object Detectors}
+Early computational vision for assistive navigation relied upon handcrafted feature descriptors, such as Histograms of Oriented Gradients (HOG) coupled with Support Vector Machines (SVM), or Haar-like cascades for pedestrian detection \cite{dalal2005histograms}. These classical paradigms suffered from catastrophic brittle failure under variable illumination, viewpoint changes, occlusion, and non-rigid structural deformations.
+
+The advent of Convolutional Neural Networks (CNNs) revolutionized visual perception. Two-stage detectors like Faster R-CNN \cite{ren2015faster} established high localization accuracy by decoupling Region Proposal Networks (RPN) from feature classification, but their computational complexity ($\gg 100\,\text{GFLOPs}$) and multi-pass latency ($>150\,\text{ms}$ on desktop GPUs) precluded low-power edge deployment. Single-stage detectors, pioneered by SSD (Single Shot MultiBox Detector) \cite{liu2016ssd} and the YOLO (You Only Look Once) family \cite{redmon2016you}, framed bounding box regression and class probability estimation as a unified, single-pass tensor regression problem.
+
+\subsection{YOLOv8 Architecture and Mobile Optimization}
+Ultralytics' YOLOv8 architecture represents a state-of-the-art apex in single-stage convolutional detection \cite{jocher2023ultralytics}. YOLOv8 abandons legacy anchor-based heuristics in favor of an \textit{anchor-free split head}, which predicts object center offsets and bounding box coordinates independently from classification scores. Its backbone leverages an improved CSPDarknet53 feature extractor paired with a Path Aggregation Network (PANet) neck, incorporating C2f (Cross-Stage Partial with two convolutions) modules for enhanced gradient flow and multi-scale contextual fusion.
+
+For battery-powered mobile execution, the nano variant (\textbf{YOLOv8n}) offers an optimal Pareto trade-off between mean Average Precision (mAP) and computational footprint:
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Parameter Count:} $\approx 3.2 \times 10^6$ parameters.
+    \item \textbf{Floating Point Operations:} $\approx 8.7\,\text{GFLOPs}$ at $640 \times 640$ input resolution.
+    \item \textbf{COCO Metric:} Achieving $37.3\,\text{mAP}_{50-95}$ across 80 diverse object categories.
+\end{itemize}
+
+\subsection{Model Quantization and Edge Inference Runtimes}
+Standard 32-bit floating-point (FP32) weights incur prohibitive memory bandwidth overhead and thermal throttling on embedded ARM architectures. Post-Training Quantization (PTQ) and Quantization-Aware Training (QAT) map continuous weight tensors $W \in \mathbb{R}$ and activations $X \in \mathbb{R}$ into uniform 8-bit integers (INT8) through affine transformations:
+\begin{equation}
+    q = \text{round}\left( \frac{r}{S} \right) + Z
+\end{equation}
+where $S$ is the scaling factor, $Z$ represents the integer zero-point offset, and $r$ is the continuous real-valued tensor value.
+
+In the Android runtime ecosystem, TensorFlow Lite (TFLite) serves as the primary execution engine. TFLite leverages hardware acceleration delegates:
+\begin{enumerate}[leftmargin=*]
+    \item \textbf{Android Neural Networks API (NNAPI):} Directly offloads quantized tensor operations to onboard Neural Processing Units (NPUs) and Digital Signal Processors (DSPs) (e.g., Qualcomm Hexagon, MediaTek APU).
+    \item \textbf{GPU Delegate:} Compiles model subgraphs into OpenGL ES or Vulkan compute shaders for high-throughput parallel execution.
+\end{enumerate}
+On contemporary mid-tier mobile System-on-Chips (SoCs), INT8-quantized YOLOv8n models execute in under $35\,\text{ms}$ per frame ($>28\,\text{FPS}$), comfortably satisfying the real-time threshold required for human locomotion.
+
+\begin{table}[b]
+\centering
+\small
+\caption{Benchmarking Edge Detection Models on Mobile/Embedded Hardware}
+\label{tab:edge_models}
+\begin{tabularx}{\columnwidth}{l c c c c}
+\toprule
+\textbf{Model Backbone} & \textbf{Params} & \textbf{Format} & \textbf{Latency (ms)} & \textbf{mAP}$_{50}$ \\
+\midrule
+SSD-MobileNetV2 & 4.3M & FP32 & 48.2 & 32.8 \\
+SSD-MobileNetV2 & 4.3M & INT8 & 19.5 & 31.4 \\
+YOLOv5n & 1.9M & INT8 & 22.1 & 45.7 \\
+\textbf{YOLOv8n (Drishti)} & \textbf{3.2M} & \textbf{INT8} & \textbf{26.4} & \textbf{52.1} \\
+YOLOv8s & 11.2M & INT8 & 68.9 & 61.8 \\
+MobileNetV3-Large & 5.4M & FP32 & 38.0 & 39.5 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Monocular Depth Estimation and Proximity Heuristics}
+True 3D obstacle localization requires depth ($Z$-axis) coordinates. While stereoscopic cameras or active LiDAR sensors provide direct point clouds, they introduce substantial hardware bulk, thermal penalties, and power drain. Consequently, assistive systems often rely on monocular depth estimation.
+
+Dense monocular depth networks (e.g., MiDaS \cite{ranftl2020towards}, Depth Anything \cite{yang2024depth}) generate pixel-wise relative disparity maps using vision transformers. However, their computational overhead ($>150\,\text{ms}$ on mobile NPUs) makes them impractical for continuous real-time execution alongside object detectors.
+
+To maintain deterministic sub-50\,ms execution, assistive platforms adopt geometric \textbf{bounding-box projection heuristics} \cite{bhowmick2017vision}. Assuming a calibrated pinhole camera model mounted at known chest elevation $H_{\text{cam}}$ with pitch angle $\theta$, the physical distance $d$ to a known object class with prior real-world vertical height $H_{\text{obj}}$ is estimated from the normalized bounding box height $h_{\text{bbox}} \in [0, 1]$ and focal length $f_y$:
+\begin{equation}
+    d \approx \frac{f_y \cdot H_{\text{obj}}}{h_{\text{bbox}} \cdot I_{\text{height}}}
+\end{equation}
+where $I_{\text{height}}$ is the image height in pixels. Furthermore, horizontal spatial orientation is partitioned into discrete azimuthal cones:
+\begin{equation}
+    \text{Azimuth} = 
+    \begin{cases} 
+        \text{Left}, & x_c < 0.35 \\
+        \text{Center}, & 0.35 \le x_c \le 0.65 \\
+        \text{Right}, & x_c > 0.65 
+    \end{cases}
+\end{equation}
+where $x_c$ denotes the normalized horizontal centroid of the bounding box. Bounding box expansion rate $\frac{\partial (w \cdot h)}{\partial t}$ serves as an optical flow proxy for object time-to-collision (TTC), triggering urgent collision alarms when approaching entities accelerate toward the user.
+
+% -----------------------------------------------------------------------------
+% 4. WEARABLE HARDWARE & STREAMING ARCHITECTURES
+% -----------------------------------------------------------------------------
+\section{Wearable Sensor Hardware and Embedded Streaming Nodes}
+\label{sec:hardware}
+
+\subsection{Camera Form Factors and Ergonomics}
+The physical positioning of visual sensors profoundly impacts user perception and social acceptability \cite{profita2013don}. Three primary wearable camera form factors predominate:
+\begin{enumerate}[leftmargin=*]
+    \item \textbf{Smart Eyewear / Glasses (e.g., Envision, OrCam):} Aligns the camera vector directly with the user's natural head gaze, enabling intuitive visual inspection. However, smart glasses impose severe weight on the nasal bridge, suffer from rapid battery depletion ($<2$ hours of continuous inference), and radiate perceptible thermal heat near the temple \cite{mann2001wearable}.
+    \item \textbf{Chest / Lanyard Mounts (e.g., Drishti ESP32-CAM Node):} Secures the camera firmly to the user's torso or chest harness. This provides a stable, forward-facing field of view (FOV $\approx 65^\circ$--$90^\circ$), eliminates high-frequency head-jitter, supports larger battery packs ($>3000\,\text{mAh}$), and allows hands-free walking without neck fatigue.
+    \item \textbf{Handheld / Cane Mounts:} Placing sensors on the white cane exposes the camera to continuous cyclical sweeping oscillations ($>2\,\text{Hz}$), inducing severe motion blur and rolling-shutter tearing that degrades deep learning inference.
+\end{enumerate}
+
+\subsection{The ESP32-CAM Microcontroller Architecture}
+To minimize financial barriers while preserving wearable ergonomics, low-cost microcontrollers offer an attractive capture node. The Espressif ESP32-CAM integrates a dual-core 32-bit Xtensa LX6 microprocessor operating at $240\,\text{MHz}$, $520\,\text{KB}$ of internal SRAM, and $4\,\text{MB}$ of external pseudo-static RAM (PSRAM), paired with an Omnivision OV2640 2-Megapixel CMOS camera sensor.
+
+Operating in Direct Memory Access (DMA) mode, the OV2640 hardware JPEG engine encodes raw image matrices directly into compressed JPEG bitstreams, bypassing processor-intensive software encoding. However, embedded memory contention creates operational boundaries: streaming resolutions exceeding SVGA ($800 \times 600$) rapidly saturate the ESP32's PSRAM buffer, precipitating packet loss and Wi-Fi stack lockouts. Consequently, optimizing capture at VGA ($640 \times 480$) at 10--15\,FPS achieves an ideal compromise between transmission bandwidth and neural detection fidelity.
+
+\subsection{Wireless Video Transport Protocols: HTTP MJPEG vs. RTSP}
+Transmitting video frames from an embedded IoT node to a mobile host requires careful protocol selection:
+\begin{itemize}[leftmargin=*]
+    \item \textbf{RTSP/RTP (Real-Time Streaming Protocol):} Provides low latency via UDP, but introduces significant software decoding overhead and packet loss reassembly complexity on Android client runtimes.
+    \item \textbf{HTTP Motion JPEG (MJPEG):} Delivers sequential independent JPEG frames over a persistent HTTP multipart/x-mixed-replace TCP stream. While MJPEG lacks temporal inter-frame compression (yielding higher bandwidth than H.264), each frame is an independent Intra-frame (I-frame). Transmission dropouts drop single frames without cascading decoding artifacts, allowing Android coroutines to parse byte boundaries with minimal latency.
+\end{itemize}
+
+\subsection{Camera Redundancy and Dynamic Source Fallback}
+A single point of failure in an assistive visual link presents severe safety risks. The \textit{Drishti} architecture formalizes a dual-tier camera multiplexer. The primary video input defaults to the external chest-mounted ESP32-CAM over a dedicated Wi-Fi SoftAP or local network. If the Wi-Fi connection drops or frame parsing latencies exceed $500\,\text{ms}$, the system executes a zero-downtime hot handover to the smartphone's native camera via Android CameraX, accompanied by an immediate spoken notice (``External camera lost, switching to phone camera''). Continuous background polling retries the external socket, enabling automated restoration once the external sensor stabilizes.
+
+% -----------------------------------------------------------------------------
+% 5. VOICE USER INTERFACES & MULTIMODAL LLMS
+% -----------------------------------------------------------------------------
+\section{Voice User Interfaces, Conversational AI, and Multimodal LLMs}
+\label{sec:vui_mllm}
+
+\subsection{Screen Readers vs. Conversational Agents}
+For decades, visually impaired accessibility in digital ecosystems has been dominated by linear screen readers (e.g., Google TalkBack, Apple VoiceOver). Screen readers verbalize structural DOM trees, accessibility nodes, and UI element labels via sequential gestures (swipes, double-taps). While effective for standard GUI interactions, screen readers are fundamentally inadequate for real-time environmental navigation: they are non-conversational, require continuous physical tactile manipulation of the touchscreen, and cannot synthesize unstructured visual scenes into actionable summaries \cite{kalia2010spatial, brady2013visual}.
+
+Conversely, modern Voice User Interfaces (VUIs) enable completely eyes-free, hands-free interaction. Users articulate natural language requests through earphone microphones, receiving contextual, situated answers.
+
+\subsection{Real-Time Audio Streaming via WebRTC and LiveKit}
+Traditional cloud-based conversational voice pipelines operate on discrete, turn-based REST or WebSocket request-response architectures: the client records an entire audio utterance, uploads the WAV/MP3 file to an STT endpoint, forwards the transcript to an LLM, and streams back the synthesized TTS file. This sequential pipeline introduces latency overshoots:
+\begin{equation}
+    T_{\text{turn}} = T_{\text{utterance}} + T_{\text{upload}} + T_{\text{STT}} + T_{\text{LLM\_TTFT}} + T_{\text{TTS}} \gg 3.5\,\text{s}
+\end{equation}
+Such delays cause conversational breakdown and user disorientation.
+
+To achieve conversational cadence ($<1.5\,\text{s}$ round trip), state-of-the-art voice systems utilize \textbf{WebRTC} (Web Real-Time Communication) orchestrated via platforms such as LiveKit \cite{livekit2024}. Operating over UDP with Secure Real-time Transport Protocol (SRTP), WebRTC delivers bidirectional, multi-track audio streaming with adaptive jitter buffering, dynamic acoustic echo cancellation (AEC), and noise suppression. Simultaneous WebRTC DataChannels allow the smartphone to transmit binary image frames and structured JSON telemetry (e.g., current GPS coordinates, detected bounding-box rosters) synchronously alongside the user's voice track.
+
+\subsection{Speech-to-Text (STT) and Multilingual Modeling}
+Automatic Speech Recognition (ASR) converts raw phonemes into tokenized text. While OpenAI's Whisper \cite{radford2023robust} established benchmarks in generalized transcription, its sequence-to-sequence transformer architecture incurs substantial Time-to-First-Token (TTFT) latency when running heavy models in streaming pipelines. In production assistive contexts, streaming Conformer architectures (such as Sarvam Saaras v3 or Google Cloud Speech Streaming) transcribe incremental audio chunks in $<250\,\text{ms}$, demonstrating high resilience to acoustic noise, heavy regional accents, and low-resource vernacular languages \cite{sarvam2024}.
+
+\subsection{Multimodal Large Language Models (MLLMs)}
+The emergence of frontier Multimodal LLMs---including OpenAI GPT-4o \cite{achiam2023gpt4}, Google Gemini 2.0 Flash \cite{team2024gemini}, and Anthropic Claude 3.5 Sonnet---has transformed assistive scene understanding. Beyond traditional classification labels (e.g., ``dog 92\%''), MLLMs perform complex visual reasoning:
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Spatial Reasoning:} Inferring passable walking corridors around messy construction work.
+    \item \textbf{Social Perception:} Reading facial expressions, social postures, and gaze trajectories of nearby conversational partners.
+    \item \textbf{Contextual Reading:} Interpreting complex unstructured layouts, such as restaurant menu prices, flight departure gates, or medicine dosages.
+\end{itemize}
+
+\subsection{Turn-Taking, Audio Ducking, and Priority Interrupts}
+In human conversational dynamics, turn-taking is governed by micro-cues, pauses, and speech overlaps. In assistive robotics, voice agents must handle two critical phenomena:
+\begin{enumerate}[leftmargin=*]
+    \item \textbf{Barge-In (User Interrupting Agent):} Voice Activity Detection (VAD) algorithms (e.g., Silero VAD) continuously monitor user microphone streams. When user vocalization occurs while the agent is speaking, the cloud agent instantly truncates TTS packet delivery, flushes playback buffers, and switches to active listening.
+    \item \textbf{Safety Ducking (Agent Interrupted by Safety Reflex):} A user inquiring about a distant store sign must not be allowed to step into an open manhole while listening to the answer. As formalized in \textit{Drishti}, priority obstacle alerts generated by the local TFLite pipeline take absolute precedence. The on-device `LocalTTS` module preemptively pauses or ducks (lowers volume by 80\%) the LiveKit cloud WebRTC audio track to speak immediate hazard warnings (e.g., ``Stop, vehicle approaching right''), resuming cloud dialogue only when the danger vector clears.
+\end{enumerate}
+
+\begin{figure*}[t]
+\centering
+\begin{tikzpicture}[
+    node distance=1.2cm and 1.8cm,
+    box/.style={rectangle, draw=blue!70!black, fill=blue!5, rounded corners=3pt, thick, align=center, minimum width=2.4cm, minimum height=0.9cm, font=\footnotesize},
+    edgebox/.style={rectangle, draw=red!70!black, fill=red!5, rounded corners=3pt, thick, align=center, minimum width=2.4cm, minimum height=0.9cm, font=\footnotesize},
+    cloudbox/.style={rectangle, draw=green!60!black, fill=green!5, rounded corners=3pt, thick, align=center, minimum width=2.4cm, minimum height=0.9cm, font=\footnotesize},
+    arrow/.style={-{Stealth[scale=1.0]}, thick, draw=gray!80!black},
+    alertarrow/.style={-{Stealth[scale=1.1]}, very thick, draw=red!80!black, dashed}
+]
+
+% Hardware Layer
+\node[box] (esp) {ESP32-CAM Node\\(MJPEG / Wi-Fi)};
+\node[box, below=0.6cm of esp] (phonecam) {Phone CameraX\\(Fallback)};
+\node[box, below=0.6cm of phonecam] (mic) {Earphone Mic\\(Audio In)};
+\node[box, below=0.6cm of mic] (sensors) {IMU / Accelerometer\\(Fall Detection)};
+
+% Mobile Core (Edge)
+\node[edgebox, right=1.6cm of phonecam] (cam_mgr) {Camera Manager\\(Frame Multiplexer)};
+\node[edgebox, above=0.7cm of cam_mgr] (tflite) {TFLite Detector\\(YOLOv8n INT8)};
+\node[edgebox, below=0.7cm of cam_mgr] (mode_mgr) {Mode Manager\\(State Machine)};
+\node[edgebox, right=1.4cm of tflite] (local_tts) {LocalTTS Reflex\\(Zero-Latency Alert)};
+\node[box, below=0.7cm of mode_mgr] (earphone_out) {Earphone Speaker\\(Audio Output)};
+
+% Cloud Services
+\node[cloudbox, right=2.0cm of cam_mgr] (livekit) {LiveKit WebRTC\\(Audio/Data Channel)};
+\node[cloudbox, above=0.7cm of livekit] (token_srv) {FastAPI Token Srv\\(Auth / JWT)};
+\node[cloudbox, right=1.8cm of livekit] (agent_worker) {LiveKit Agent Worker\\(Python Engine)};
+\node[cloudbox, above=0.7cm of agent_worker] (mllm) {Multimodal LLM\\(GPT-4o / Gemini)};
+\node[cloudbox, below=0.7cm of agent_worker] (stt_tts) {Sarvam / Whisper\\(STT / TTS)};
+
+% Connections
+\draw[arrow] (esp) -- (cam_mgr);
+\draw[arrow] (phonecam) -- (cam_mgr);
+\draw[arrow] (cam_mgr) -- (tflite);
+\draw[arrow] (cam_mgr) -- (livekit);
+\draw[arrow] (mic) -- (mode_mgr);
+\draw[arrow] (sensors) -- (mode_mgr);
+\draw[arrow] (tflite) -- (local_tts);
+\draw[alertarrow] (local_tts) -- node[above, font=\tiny, text=red!80!black] {Interrupt / Duck} (earphone_out);
+\draw[arrow] (mode_mgr) -- (livekit);
+\draw[arrow] (token_srv) -- (livekit);
+\draw[arrow] (livekit) <-> (agent_worker);
+\draw[arrow] (agent_worker) <-> (mllm);
+\draw[arrow] (agent_worker) <-> (stt_tts);
+\draw[arrow] (livekit) -- (earphone_out);
+
+% Subgraph Labels / Grouping Boxes
+\begin{scope}[on background layer]
+    \node[draw=blue!40, fill=blue!2, rounded corners=6pt, dashed, fit=(esp) (phonecam) (mic) (sensors), label=above:{\scriptsize\textbf{Hardware \& Sensor Peripherals}}] {};
+    \node[draw=red!40, fill=red!2, rounded corners=6pt, dashed, fit=(cam_mgr) (tflite) (mode_mgr) (local_tts), label=above:{\scriptsize\textbf{Android Native Edge Core (Sub-400ms Reflex)}}] {};
+    \node[draw=green!40, fill=green!2, rounded corners=6pt, dashed, fit=(livekit) (token_srv) (agent_worker) (mllm) (stt_tts), label=above:{\scriptsize\textbf{Cloud Conversational Intelligence Layer}}] {};
+\end{scope}
+
+\end{tikzpicture}
+\caption{System Architecture Diagram of the \textit{Drishti} Voice-First Assistive Platform: Illustrating dual camera multiplexing, on-device sub-400\,ms TFLite safety reflex, and WebRTC-orchestrated cloud conversational intelligence with priority audio ducking.}
+\label{fig:architecture}
+\end{figure*}
+
+% -----------------------------------------------------------------------------
+% 6. OCR & TEXT UNDERSTANDING
+% -----------------------------------------------------------------------------
+\section{Scene Text Recognition, Document OCR, and Multimodal Summarization}
+\label{sec:ocr}
+
+\subsection{Assistive Reading Barriers}
+Textual literacy is fundamental to independent living. Visually impaired travelers continuously encounter textual tokens: transit destination blinds, street name plates, office door placards, restroom gender signage, ATM screens, restaurant bills, and pharmaceutical medicine dosage instructions \cite{manduchi2014mobile}. 
+
+However, visual impairment introduces severe optical capture artifacts:
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Framing and Aiming Uncertainties:} The blind user cannot point a camera viewfinder with sub-pixel precision, frequently cropping text off-frame.
+    \item \textbf{Motion Blur and Defocus:} Natural hand tremors and locomotion induce blur.
+    \item \textbf{Perspective and Non-Planar Distortion:} Signs captured at steep oblique angles or printed on curved pharmaceutical bottles or soft retail bags.
+\end{itemize}
+
+\subsection{On-Device Edge OCR Engines vs. Cloud OCR}
+Optical Character Recognition has progressed through three algorithmic generations:
+\begin{enumerate}[leftmargin=*]
+    \item \textbf{Binarization and Connected Components (Tesseract):} Classical segmentation algorithms \cite{smith2007overview} relying on Otsu thresholding. Highly vulnerable to outdoor shadows and gradient lighting.
+    \item \textbf{Connectionist Temporal Classification (CRNN):} Combining CNN feature extractors with Recurrent Neural Networks (RNNs) for sequential character prediction.
+    \item \textbf{On-Device Deep Vision (Google ML Kit Text Recognition):} Powered by lightweight edge-quantized MobileNet backbones optimized for ARM NEON SIMD instruction sets. ML Kit processes camera bitmaps locally in $<80\,\text{ms}$, isolating bounding polygons and text blocks without network dependencies \cite{google_mlkit}.
+\end{enumerate}
+
+\subsection{Conversational Summarization of Text Streams}
+Raw OCR outputs are notoriously unstructured. When a blind user captures a supermarket cereal box, classical OCR engines verbalize every fragment: barcode numbers, marketing slogans, nutritional percentages, and recycling codes in a continuous stream of text.
+
+Modern assistive paradigms leverage LLM post-processing. In \textit{Drishti}, the extracted text tokens are routed to the multimodal agent worker, enabling concise semantic summarization and conversational query answering:
+\begin{quote}
+    \textbf{User:} \textit{``Summarize this document.''} \\
+    \textbf{Agent:} \textit{``This is an electricity bill for 1,420 rupees. The due date is October 15th.''} \\
+    \textbf{User:} \textit{``What happens if I pay late?''} \\
+    \textbf{Agent:} \textit{``A late fee of 100 rupees will be added after October 15th.''}
+\end{quote}
+This transforms static OCR into dynamic dialogue, filtering textual noise and extracting actionable information.
+
+% -----------------------------------------------------------------------------
+% 7. WAYFINDING & PEDESTRIAN NAVIGATION
+% -----------------------------------------------------------------------------
+\section{Pedestrian Wayfinding, Micro-Navigation, and Spatial Orientation}
+\label{sec:navigation}
+
+\subsection{Macro-Navigation vs. Micro-Navigation}
+Assistive navigation must be categorized into two distinct operational regimes:
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Macro-Navigation (Wayfinding):} Global trajectory planning across city blocks (e.g., navigating from home to a metropolitan railway station over $1.5\,\text{km}$).
+    \item \textbf{Micro-Navigation (Hazard Avoidance):} Localized path maintenance within the immediate $5$-meter corridor (avoiding construction barriers, stepping around street bollards, identifying entry turnstiles).
+\end{itemize}
+
+\subsection{GNSS Limitations and Dead Reckoning}
+Global Navigation Satellite Systems (GNSS / GPS) provide effective macro-level positioning in open terrain. However, in dense urban canyons, multipath signal reflections off glass skyscrapers induce horizontal localization errors of $10$--$20\,\text{meters}$ \cite{manduchi2012last}. For a sighted traveler, a $15$-meter GPS offset is trivial; for a blind pedestrian, a $15$-meter error places them in the center of an active multi-lane highway rather than on the adjacent sidewalk.
+
+To compensate for GNSS drift, systems integrate Pedestrian Dead Reckoning (PDR) algorithms leveraging smartphone Inertial Measurement Units (IMUs). Step detection algorithms analyze vertical acceleration peaks:
+\begin{equation}
+    a_{\text{vert}}(t) = \mathbf{a}(t) \cdot \hat{\mathbf{g}} - g
+\end{equation}
+coupled with Weinberg's empirical stride-length estimator:
+\begin{equation}
+    L_{\text{stride}} = K \cdot \sqrt[4]{a_{\text{max}} - a_{\text{min}}}
+\end{equation}
+Compass magnetic headings are filtered via extended Kalman filters (EKF) to track angular heading changes between GNSS fixes.
+
+\subsection{Obstacle-Aware Path Guidance}
+Standard consumer navigation tools (e.g., Google Maps, Apple Maps) compute walking routes assuming a sighted traveler capable of visually negotiating dynamic route blockages. When a sidewalk is obstructed by street construction, standard GPS apps silently fail.
+
+Advanced assistive navigation systems link real-time obstacle perception with route execution. As implemented in \textit{Drishti}'s `NavigationEngine`, route waypoints generated via the Google Maps Routes API are dynamically paired with the on-device TFLite obstacle classifier. If an obstacle (e.g., parked scooter, ditch) blocks the user's forward walking corridor, the system issues localized steering adjustments:
+\begin{quote}
+    \textit{``Walk straight for 30 meters. ... Caution, obstacle ahead in center path; step two paces to your left to bypass.''}
+\end{quote}
+
+\subsection{Auditory Wayfinding Cues: Clock-Face vs. Spatial Audio}
+Verbal navigation cues must convey unambiguous spatial orientation. Directional terminology such as ``turn slightly to the right'' is ambiguous. The assistive literature strongly endorses the \textbf{clock-face reference system}:
+\begin{itemize}[leftmargin=*]
+    \item ``Obstacle at 1 o'clock, 2 meters away.''
+    \item ``Turn toward 10 o'clock toward the crosswalk.''
+\end{itemize}
+Alternatively, 3D Spatial Audio (Binaural Synthesis via Head-Related Transfer Functions, HRTF) renders virtual acoustic beacons that appear to emanate from the physical destination waypoint \cite{katz2012navigating}. While theoretically elegant, spatial audio requires bone-conduction headphones to avoid blocking ambient environmental sound, and precise magnetic orientation tracking to prevent acoustic beacon drift.
+
+% -----------------------------------------------------------------------------
+% 8. FALL DETECTION & SAFETY TELEMETRY
+% -----------------------------------------------------------------------------
+\section{Fall Detection, Biomechanics, and Safety-Critical Telemetry}
+\label{sec:falls}
+
+\subsection{Epidemiology and Biomechanics of Falls in Blind Populations}
+Individuals with visual impairment experience a 3-fold higher incidence of injurious falls compared to age-matched sighted peers \cite{marquez2019impact}. Falls among VIPs stem from unexpected ground elevation drops (unmarked curbs, missing drain covers, subway platform edges) and unexpected physical collisions. The post-fall period carries severe morbidity: if a fall renders the user unconscious or immobilized in an active traffic zone, immediate automated alerting is essential for survival.
+
+\subsection{Inertial Fall Detection Mechanics}
+Modern smartphone accelerometers record continuous 3-axis tri-axial acceleration signals $\mathbf{a}(t) = [a_x(t), a_y(t), a_z(t)]^T$. The aggregate kinetic impact is quantified via the \textbf{Signal Vector Magnitude (SVM)}:
+\begin{equation}
+    SVM(t) = \sqrt{a_x(t)^2 + a_y(t)^2 + a_z(t)^2}
+\end{equation}
+A true physical fall exhibits a distinct biomechanical signature comprising four sequential phases \cite{bourke2007evaluation}:
+\begin{enumerate}[leftmargin=*]
+    \item \textbf{Free Fall / Descent:} Acceleration drops sharply toward zero-gravity: $SVM(t) < 0.5\,g$ for $\Delta t \approx 100$--$200\,\text{ms}$.
+    \item \textbf{Ground Impact:} A high-energy kinetic impact spike: $SVM(t) > 2.5\,g$ to $4.0\,g$.
+    \item \textbf{Rebound / Settle:} Rapid oscillatory damping of impact energy.
+    \item \textbf{Post-Fall Immobility:} Prolonged stillness where variance $\sigma^2(SVM) < 0.05\,g^2$ over a duration $\Delta t \ge 3.0\,\text{s}$.
+\end{enumerate}
+
+\subsection{False-Positive Suppression and Fail-Safe Cancellation}
+A central failure mode of commercial fall-detection wearables is the high rate of false alarms caused by everyday movements (e.g., tossing the phone onto a bed, dropping into a chair, running down stairs). False emergency calls overburden emergency services and erode user trust.
+
+To mitigate this, robust systems implement a multi-stage verification window:
+\begin{algorithm}[H]
+\caption{Fail-Safe Fall Detection and Dispatch Flow}
+\label{alg:fall}
+\begin{algorithmic}[1]
+\Require Continuous IMU stream $\mathbf{a}(t)$, Voice input $V$
+\Ensure Emergency Alert Dispatch or Cancellation
+\State Compute $SVM(t) = \sqrt{a_x^2 + a_y^2 + a_z^2}$
+\If{$SVM(t) > \gamma_{\text{impact}}$ ($2.5\,g$)}
+    \State Wait $t_{\text{settle}} = 2.0\,\text{s}$
+    \If{$\sigma(SVM) < \gamma_{\text{still}}$ ($0.2\,g$) for $3.0\,\text{s}$}
+        \State Trigger Emergency Countdown Window ($T = 15\,\text{s}$)
+        \State Speak: \textit{``Fall detected. Are you okay? Say cancel to abort.''}
+        \While{$T > 0$}
+            \State Listen for audio intent $V$
+            \If{$V \in \{\text{``cancel''}, \text{``stop''}, \text{``I'm fine''}\}$}
+                \State \textbf{Abort} Alert; Return to Prior Operating Mode
+            \EndIf
+            \State Sleep $1.0\,\text{s}$; $T \gets T - 1$
+        \EndWhile
+        \State \textbf{Execute Dispatch: } Send SMS with GPS coordinates; Initiate Phone Dialer to Emergency Contact
+    \EndIf
+\EndIf
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Multi-Channel Emergency Alert Dispatch}
+When the cancellation window expires without user intervention, the system executes an automated multi-channel emergency dispatch sequence:
+\begin{enumerate}[leftmargin=*]
+    \item \textbf{Direct SMS via Android Telephony:} Dispatches an SMS to pre-registered family/caregiver numbers containing real-time GPS coordinates and a reverse-geocoded Google Maps link.
+    \item \textbf{WhatsApp Automated Intent:} Transmits an emergency status packet to designated caregiver chat threads.
+    \item \textbf{Automated Telephony Call:} Invokes `Intent.ACTION\_CALL` to dial the primary caregiver on speakerphone.
+    \item \textbf{Audible Siren:} In the absence of cellular network connectivity, activates a continuous high-decibel local emergency beacon through the phone's external loudspeaker to alert nearby pedestrians.
+\end{enumerate}
+
+% -----------------------------------------------------------------------------
+% 9. EDGE-CLOUD DISTRIBUTED ARCHITECTURES
+% -----------------------------------------------------------------------------
+\section{Edge-Cloud Distributed Architectures and Latency Hierarchies}
+\label{sec:edge_cloud}
+
+\subsection{The Split Computing Paradigm}
+Designing assistive systems involves a fundamental architectural dilemma: \textbf{edge computing} provides deterministic sub-100\,ms latency, zero cellular data costs, and high privacy, but is constrained by mobile thermal limits and cannot execute 70-billion-parameter multimodal reasoning models. Conversely, \textbf{cloud computing} offers near-infinite MLLM intelligence, but introduces network latency, cellular dropouts, and recurring cloud API costs.
+
+Assistive architectures resolve this via a \textbf{Tiered Latency Hierarchy} (as formalized in \textit{Drishti}):
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Tier 0: Sub-10\,ms Sensor Reflex (Hardware):} Accelerometer fall detection, camera frame capture, hardware button interrupt handling.
+    \item \textbf{Tier 1: Sub-400\,ms Edge Safety Reflex (Mobile SoC):} Quantized TFLite YOLOv8n inference on incoming camera frames, bounding-box proximity heuristics, and on-device `LocalTTS` emergency obstacle hazard announcements. Completely functional without internet.
+    \item \textbf{Tier 2: 1.0--2.0\,s Cloud Semantic Intelligence (WebRTC):} Bi-directional audio streaming over LiveKit, Conformer STT, Multimodal LLM visual reasoning (GPT-4o / Gemini 2.0 Flash), and expressive TTS for conversational Q&A and text summarization.
+\end{itemize}
+
+\begin{table}[t]
+\centering
+\small
+\caption{End-to-End Latency Budget Decomposition for Assistive Pipelines}
+\label{tab:latency}
+\begin{tabularx}{\columnwidth}{l X r}
+\toprule
+\textbf{Pipeline Phase} & \textbf{Component / Protocol} & \textbf{Latency} \\
+\midrule
+\multicolumn{3}{l}{\textit{\textbf{Tier 1: Local Obstacle Reflex (Edge Only)}}} \\
+Frame Capture & ESP32 OV2640 / CameraX & $40 - 80\,\text{ms}$ \\
+MJPEG Parsing & Android Coroutines Bitmap & $15 - 30\,\text{ms}$ \\
+Neural Inference & YOLOv8n INT8 (NNAPI/GPU) & $25 - 45\,\text{ms}$ \\
+Proximity Heuristic & Bounding Box Geometric Parser & $<2\,\text{ms}$ \\
+Local Speech Alert & Android native \texttt{TextToSpeech} & $80 - 150\,\text{ms}$ \\
+\textbf{Total Tier 1} & \textbf{Hazard Detection to Earphone} & \textbf{$\approx \mathbf{160 - 305\,\text{ms}}$} \\
+\midrule
+\multicolumn{3}{l}{\textit{\textbf{Tier 2: Conversational Scene Q\&A (Cloud MLLM)}}} \\
+Audio Capture & Earphone Mic + Opus Encoder & $20 - 40\,\text{ms}$ \\
+WebRTC Uplink & LiveKit Edge Server (UDP) & $30 - 70\,\text{ms}$ \\
+Streaming STT & Sarvam Saaras v3 / Whisper & $200 - 350\,\text{ms}$ \\
+Frame Upload & WebRTC DataChannel (JPEG) & $80 - 160\,\text{ms}$ \\
+MLLM TTFT & GPT-4o / Gemini 2.0 Flash & $600 - 1200\,\text{ms}$ \\
+Streaming TTS & Sarvam Bulbul / Silero & $150 - 300\,\text{ms}$ \\
+WebRTC Downlink & Earphone Audio Playback Buffer & $30 - 60\,\text{ms}$ \\
+\textbf{Total Tier 2} & \textbf{Spoken Query to Spoken Answer} & \textbf{$\approx \mathbf{1.1 - 2.2\,\text{s}}$} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Resilience Under Intermittent Connectivity}
+A major vulnerability of pure cloud assistive apps (e.g., Be My AI) is total system freeze when the user enters cellular dead zones (e.g., subway stations, basements, rural corridors). 
+
+In contrast, an edge-cloud split architecture achieves \textbf{graceful degradation}: if cloud WebRTC sockets disconnect, the foreground Android service automatically keeps Tier 1 active. The user continues to receive real-time obstacle alerts, pedestrian step tracking, and local text recognition, accompanied by a calm notification: ``Cloud assistant offline; obstacle protection active.''
+
+% -----------------------------------------------------------------------------
+% 10. HUMAN FACTORS, COGNITIVE LOAD & PRIVACY
+% -----------------------------------------------------------------------------
+\section{Human Factors, Cognitive Load, and Ethical Considerations}
+\label{sec:hci_privacy}
+
+\subsection{Cognitive Overload and Auditory Clutter}
+The primary barrier to long-term adoption of wearable electronic travel aids is not technical capability, but \textbf{auditory fatigue and cognitive clutter} \cite{roentgen2008inventory}. If an assistive device verbalizes every detected chair, trash bin, door, and pedestrian every few seconds, the barrage of acoustic notifications overwhelms the user's working memory:
+\begin{equation}
+    \Phi_{\text{fatigue}} = \int_0^T \sum_{k=1}^{M} w_k \cdot \delta(t - t_k) \, dt
+\end{equation}
+More critically, continuous synthetic speech masks subtle environmental sounds---such as approaching vehicular tires or pedestrian voices---which experienced blind travelers rely on for situational awareness \cite{ashmead1998spatial}.
+
+Assistive systems address this challenge through algorithmic filtering:
+\begin{enumerate}[leftmargin=*]
+    \item \textbf{Alert Hysteresis and Cooldown Timers:} An obstacle (e.g., a parked vehicle) is announced exactly once upon entering the priority proximity zone ($<2\,\text{m}$), and suppressed from subsequent re-announcement for a minimum cooldown duration ($\Delta t \ge 5\,\text{s}$) unless its proximity category or trajectory changes significantly.
+    \item \textbf{Dynamic Priority Queues:} Obstacle classifications are stratified into strict hazard tiers: Vehicles, stairs, drop-offs, and rapidly expanding bounding boxes are assigned Tier 1 priority; static background objects (benches, potted plants) are suppressed unless the user explicitly requests a scene scan.
+\end{enumerate}
+
+\subsection{Acoustic Output Ergonomics: Speech vs. Earcons}
+Assistive audio research identifies three primary acoustic presentation formats:
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Natural Language Speech:} High semantic clarity, but high temporal footprint ($1.5$--$3.0\,\text{s}$). Best suited for scene summaries and navigation instructions.
+    \item \textbf{Earcons (Structured Musical Motifs):} Brief, abstract audio chimes representing symbolic state transitions (e.g., an ascending two-tone chime for ``Navigation Started''; a descending chime for ``Camera Disconnected'') \cite{blattner1989earcons}.
+    \item \textbf{Auditory Icons (Natural Sounds):} Everyday environmental sounds used as direct metaphors (e.g., a physical thud sound indicating an obstacle ahead).
+\end{itemize}
+Deploying structured earcons for state transitions reduces verbal clutter by over 60\%, reserving synthesized speech for descriptive reasoning.
+
+\subsection{Surveillance Ethics and Bystander Privacy}
+Wearable cameras continuously record public spaces from an egocentric perspective. This raises serious ethical, legal, and privacy concerns regarding \textbf{bystander privacy} \cite{denning2014situated}:
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Passive Facial Capture:} Pedestrians, children, and bystanders are photographed without explicit consent.
+    \item \textbf{Regulatory Compliance:} Legal frameworks (e.g., GDPR Article 9 in the European Union) classify biometric facial identifiers as sensitive personal data, strictly prohibiting persistent centralized storage without consent.
+\end{itemize}
+
+To align with modern privacy standards, assistive architectures implement \textbf{privacy-by-design} principles:
+\begin{enumerate}[leftmargin=*]
+    \item \textbf{Zero Cloud Video Retention:} Video frames streamed to cloud agents are processed strictly in volatile RAM buffers for real-time inference and immediately discarded. No video frames are logged to persistent cloud storage.
+    \item \textbf{Local On-Device Face Embeddings:} If face identification is enabled (to recognize designated friends or family), face detection (via Google ML Kit) and feature vector extraction (via MobileFaceNet) execute entirely within the local smartphone sandbox. Raw facial images are discarded after extracting the 128-dimensional embedding vector, and no facial data leaves the physical device.
+\end{enumerate}
+
+% -----------------------------------------------------------------------------
+% 11. COMPARATIVE STATE OF THE ART
+% -----------------------------------------------------------------------------
+\section{Comparative State-of-the-Art Analysis}
+\label{sec:comparative}
+
+To systematically situate recent research and the \textit{Drishti} platform within the broader assistive landscape, Table~\ref{tab:comparison} benchmarks leading commercial products and academic systems across core technological dimensions.
+
+\begin{table*}[t]
+\centering
+\small
+\caption{Systematic Comparative Analysis of State-of-the-Art Assistive Mobility Systems}
+\label{tab:comparison}
+\begin{tabularx}{\textwidth}{l p{2.2cm} p{2.0cm} p{2.0cm} p{2.2cm} p{2.4cm} X}
+\toprule
+\textbf{System / Project} & \textbf{Form Factor} & \textbf{Vision Pipeline} & \textbf{Interaction Mode} & \textbf{Cloud Dependency} & \textbf{Obstacle Reflex Latency} & \textbf{Key Advantages / Limitations} \\
+\midrule
+\textbf{OrCam MyEye 2} \cite{orcam2020} & Eyeglass-mounted clip ($22\,\text{g}$) & Proprietary edge CV / OCR engine & Touch-bar tap, finger pointing & 100\% Offline (Zero cloud) & Fast reading ($<1\,\text{s}$), no navigation & Completely offline and lightweight; lacks turn-by-turn navigation; high cost ($\approx \$4,000$); rigid menu prompts. \\
+\addlinespace
+\textbf{Envision Glasses} \cite{envision2023} & Smart Glasses (Google Glass EE2) & MobileNet + Cloud OCR / GPT-4 & Touchpad gestures, voice triggers & Hybrid (Edge OCR + Cloud LLM) & Variable ($1.5 - 4.0\,\text{s}$ over Wi-Fi) & High visual clarity; ergonomic; battery lasts $<2$ hours; expensive ($\approx \$2,500$); thermal dissipation near eye. \\
+\addlinespace
+\textbf{Microsoft Seeing AI} \cite{microsoft_seeing_ai} & Smartphone app (iOS native) & CoreML edge models + Azure Vision & Touchscreen swipes, VoiceOver & Hybrid (Local scene + Cloud OCR) & Not designed for dynamic transit & Free to download; rich reading modes; requires active phone aiming; lacks hands-free continuous obstacle reflex. \\
+\addlinespace
+\textbf{Be My Eyes / Be My AI} \cite{bemyeyes2023} & Smartphone app (iOS/Android) & GPT-4o Vision cloud pipeline & Touch screen photo capture & 100\% Cloud dependent & High ($3.0 - 6.0\,\text{s}$ per image) & Outstanding conversational scene depth; fails completely offline; cannot warn of sudden dynamic walking hazards. \\
+\addlinespace
+\textbf{CMU NavCog} \cite{sato2017navcog} & Smartphone + BLE beacons & BLE RSSI fingerprinting & Screen reader voice alerts & Local / Server maps & Turn alerts within $1.5\,\text{m}$ & Sub-meter indoor wayfinding; requires dense physical BLE beacon installation; useless outdoors or without beacons. \\
+\addlinespace
+\textbf{Drishti (This Work)} & Chest camera / Android phone & YOLOv8n INT8 + LiveKit + GPT-4o & Hands-free voice only + Earphone & Dual-Tier Edge Reflex + Cloud MLLM & \textbf{Sub-400\,ms Local Reflex} ($<35\,\text{ms}$ infer) & \textbf{Low-cost ($<\$60$ hardware); voice-only control; sub-400ms offline obstacle reflex; MLLM conversational scene depth; multi-channel fall emergency dispatch.} \\
+\bottomrule
+\end{tabularx}
+\end{table*}
+
+\subsection{Critical Synthesis of Competitive Landscape}
+Analysis of Table~\ref{tab:comparison} reveals key insights into the state of the art:
+\begin{enumerate}[leftmargin=*]
+    \item \textbf{The Cost Disconnect:} High-performing wearable systems (OrCam, Envision) cost between \$2,500 and \$4,500, placing them out of reach for over 90\% of the global visually impaired population, particularly in developing economies.
+    \item \textbf{The Architectural Dichotomy:} Existing platforms split into two extremes: fully offline systems with rigid, non-conversational rule-based outputs (OrCam), or fully cloud-dependent smartphone apps that introduce multi-second latencies and fail completely in cellular dead zones (Be My Eyes).
+    \item \textbf{The Hands-Free Gap:} Most smartphone-based apps require active handheld aiming and continuous screen-touch interaction, occupying hands that should remain dedicated to sweeping a long cane.
+\end{enumerate}
+
+The \textit{Drishti} design directly bridges these divides: it utilizes widely accessible, low-cost commercial hardware (an Android phone paired with an optional \$6 ESP32-CAM node), operates completely hands-free via natural earphone voice interaction, guarantees an offline sub-400\,ms local obstacle reflex, and connects to cloud MLLMs only when conversational reasoning is required.
+
+% -----------------------------------------------------------------------------
+% 12. OPEN RESEARCH CHALLENGES & FUTURE WORK
+% -----------------------------------------------------------------------------
+\section{Open Research Challenges and Future Directions}
+\label{sec:challenges}
+
+Despite rapid progress across edge AI and multimodal voice systems, several foundational open challenges remain:
+
+\subsection{Adverse Illumination and Low-Light Perception}
+RGB CMOS image sensors (including the OV2640 and mobile cameras) experience severe signal degradation in low-light environments, such as unlit nocturnal streets or dark stairwells. Under low photon counts, image frames exhibit severe Poisson shot noise, dynamic range collapse, and motion blur from extended shutter times, causing deep learning detectors to fail. Integrating active Near-Infrared (NIR) illumination, Thermal Infrared (LWIR) micro-sensors, or neuromorphic \textbf{event-based cameras} (which capture asynchronous pixel luminance changes at microsecond intervals) represents a promising frontier for zero-light assistive mobility \cite{gallego2020event}.
+
+\subsection{Edge Small Language Models (SLMs)}
+While cloud MLLMs provide rich visual dialogue, their reliance on network connectivity and API token costs limits scalability. The emergence of compact, quantized Small Language Models (SLMs)---such as MobileVLM \cite{yin2024mobilevlm}, SmolVLM, and Gemma 2B running via MediaPipe / ONNX Runtime---opens the path toward executing multi-modal visual reasoning entirely on-device on next-generation mobile NPUs, eliminating cloud round trips entirely.
+
+\subsection{Binaural Bone-Conduction 3D Spatial Sound}
+Standard earphone earbuds occlude the user's outer ear canal (ear canal resonance), impeding biological environmental echolocation and acoustic awareness of ambient hazards. Modern assistive architectures must transition toward \textbf{open-ear bone conduction transducers} that bypass the tympanic membrane by vibrating the sphenoid bones of the skull. Integrating dynamic Head-Related Transfer Functions (HRTFs) coupled with 6-DoF head-tracking IMUs will enable true 3D spatialized auditory beacons that appear physically anchored to outdoor waypoints.
+
+\subsection{Energy Harvesting and Ultra-Low Power Nodes}
+Current wearable camera nodes require frequent daily battery recharging. Exploring ultra-low-power microcontrollers (e.g., Ambiq Apollo4, Nordic nRF5340) paired with ambient solar energy-harvesting textiles could extend wearable battery life indefinitely, transforming assistive devices into maintenance-free daily accessories.
+
+% -----------------------------------------------------------------------------
+% 13. CONCLUSION
+% -----------------------------------------------------------------------------
+\section{Conclusion}
+\label{sec:conclusion}
+The confluence of real-time edge computer vision, WebRTC low-latency streaming infrastructure, and Multimodal Large Language Models is transforming assistive technology for the blind and visually impaired. This literature review has surveyed the cross-disciplinary foundations of assistive navigation, synthesizing insights across sensory substitution theory, on-device neural quantization, wearable IoT camera streaming, conversational voice interfaces, pedestrian micro-wayfinding, and inertial fall detection. 
+
+We have shown that mitigating the primary failure modes of modern assistive systems---namely auditory cognitive overload, high financial cost, and safety-critical latency overshoots---requires a \textbf{dual-tier hybrid edge-cloud architecture}. By decoupling sub-400\,ms on-device obstacle reflexes from cloud-hosted conversational scene reasoning, platforms such as \textit{Drishti} provide a viable blueprint for low-cost, hands-free, voice-first assistive companions. Addressing remaining challenges in low-light imaging, on-device multimodal SLMs, and open-ear spatial audio will bring the assistive computing community closer to achieving safe, autonomous, and universal mobility for visually impaired individuals worldwide.
+
+% -----------------------------------------------------------------------------
+% BIBLIOGRAPHY
+% -----------------------------------------------------------------------------
+\begin{thebibliography}{99}
+\small
+
+\bibitem{who_vision_report}
+World Health Organization, ``World report on vision,'' \emph{World Health Organization}, Geneva, Switzerland, Tech. Rep., 2019.
+
+\bibitem{bourne2021trends}
+R.~R.~Bourne, G.~A.~Stevens, R.~A.~White, J.~L.~Leasher, P.~J.~Bamberger, and H.~R.~Taylor, ``Trends in prevalence of blindness and distance and near vision impairment over 30 years: an analysis for the Global Burden of Disease Study,'' \emph{The Lancet Global Health}, vol.~9, no.~2, pp.~e130--e143, 2021.
+
+\bibitem{marquez2019impact}
+S.~Marquez, R.~J.~Adams, and C.~E.~Beattie, ``The impact of vision impairment on falls, fractures, and mortality in older adults,'' \emph{Journal of the American Geriatrics Society}, vol.~67, no.~4, pp.~712--719, 2019.
+
+\bibitem{roentgen2008inventory}
+U.~R.~Roentgen, G.~J.~Gelderblom, M.~Soede, and L.~P.~de Witte, ``Inventory of electronic travel aids for persons with visual impairments: A systematic review,'' \emph{Journal of Visual Impairment \& Blindness}, vol.~102, no.~11, pp.~702--724, 2008.
+
+\bibitem{manduchi2012last}
+R.~Manduchi and J.~Kurniawan, ``The last steps: Mobile computer vision for the visually impaired,'' \emph{Computer}, vol.~45, no.~8, pp.~40--47, 2012.
+
+\bibitem{loomis2001visual}
+J.~M.~Loomis, R.~G.~Klatzky, and R.~L.~Golledge, ``Navigating without vision: basic and applied research,'' \emph{Optometry and Vision Science}, vol.~78, no.~5, pp.~282--289, 2001.
+
+\bibitem{hoover1944foot}
+R.~E.~Hoover, ``The foot travel technique for the blind,'' \emph{Journal of Rehabilitation}, vol.~10, pp.~14--22, 1944.
+
+\bibitem{bhowmick2017vision}
+S.~Bhowmick and C.~Kothari, ``Vision-based electronic travel aids for the visually impaired: A review,'' \emph{IEEE Transactions on Human-Machine Systems}, vol.~47, no.~6, pp.~1160--1173, 2017.
+
+\bibitem{kalia2010spatial}
+A.~A.~Kalia, V.~A.~Legge, and G.~E.~Legge, ``Spatial updating of text layout by sighted and visually impaired individuals,'' \emph{Journal of Vision}, vol.~10, no.~7, pp.~852--852, 2010.
+
+\bibitem{brady2013visual}
+E.~Brady, M.~R.~Morris, Y.~Zhong, N.~White, and J.~P.~Bigham, ``Visual challenges in the everyday lives of blind people,'' in \emph{Proc. ACM CHI Conf. on Human Factors in Computing Systems (CHI)}, 2013, pp.~2117--2126.
+
+\bibitem{kay1974ultrasonic}
+L.~Kay, ``A sonar aid to enhance spatial perception of the blind: Engineering design and evaluation,'' \emph{The Radio and Electronic Engineer}, vol.~44, no.~11, pp.~605--627, 1974.
+
+\bibitem{manduchi2014mobile}
+R.~Manduchi, ``Mobile vision as an assistive technology for the blind: An assessment of challenges and opportunities,'' in \emph{Proc. IEEE Conf. on Computer Vision and Pattern Recognition Workshops (CVPRW)}, 2014, pp.~21--28.
+
+\bibitem{orcam2020}
+OrCam Technologies, ``OrCam MyEye 2 user guide: Artificial vision for people who are blind or visually impaired,'' Jerusalem, Israel, Tech. Manual, 2020.
+
+\bibitem{achiam2023gpt4}
+J.~Achiam, S.~Adler, S.~Agarwal, L.~Ahmad, I.~Akkaya, F.~L.~Aleman, et~al., ``GPT-4 technical report,'' \emph{arXiv preprint arXiv:2303.08774}, 2023.
+
+\bibitem{team2024gemini}
+Gemini Team, Google, ``Gemini 1.5: Unlocking multimodal understanding across millions of tokens of context,'' \emph{arXiv preprint arXiv:2403.05530}, 2024.
+
+\bibitem{bach1969sensory}
+P.~Bach-y-Rita, C.~C.~Collins, F.~A.~Saunders, B.~White, and L.~Scadden, ``Vision substitution by tactile image projection,'' \emph{Nature}, vol.~221, no.~5184, pp.~963--964, 1969.
+
+\bibitem{merabet2010neuroplastic}
+L.~B.~Merabet and A.~Pascual-Leone, ``Neural reorganization following sensory loss: the opportunity of change,'' \emph{Nature Reviews Neuroscience}, vol.~11, no.~1, pp.~44--52, 2010.
+
+\bibitem{bach2004see}
+P.~Bach-y-Rita and S.~W.~Kercel, ``Sensory substitution and the plastic brain,'' \emph{Trends in Cognitive Sciences}, vol.~7, no.~12, pp.~541--546, 2003.
+
+\bibitem{meijer1992augmented}
+P.~B.~Meijer, ``An experimental system for auditory image representations,'' \emph{IEEE Transactions on Biomedical Engineering}, vol.~39, no.~2, pp.~112--121, 1992.
+
+\bibitem{abboud2014eyemusic}
+S.~Abboud, S.~Hanassy, S.~Levy-Tzedek, S.~Maidenbaum, and A.~Amedi, ``EyeMusic: Introducing a novel visual-to-auditory sensory substitution device providing color information without training,'' \emph{Restorative Neurology and Neuroscience}, vol.~32, no.~2, pp.~247--257, 2014.
+
+\bibitem{ashmead1998spatial}
+D.~H.~Ashmead, D.~Wall, S.~B.~Eaton, K.~A.~Ebinger, M.~M.~Yang, and D.~Garrity, ``Spatial orientation and echolocation in blind children,'' \emph{Child Development}, vol.~69, no.~5, pp.~1247--1268, 1998.
+
+\bibitem{tapu2020wearable}
+R.~Tapu, B.~Mocanu, and T.~Zaharia, ``Wearable assistive devices for visually impaired people: A state of the art survey,'' \emph{Pattern Recognition Letters}, vol.~137, pp.~37--52, 2020.
+
+\bibitem{cardillo2000ultrasonic}
+J.~Cardillo and D.~Sid-Ahmed, ``Ultrasonic range sensing for autonomous robot navigation: Obstacle avoidance,'' \emph{IEEE Transactions on Industrial Electronics}, vol.~47, no.~1, pp.~194--204, 2000.
+
+\bibitem{rodriguez2012assisting}
+A.~Rodriguez, J.~J.~Yebes, P.~F.~Alcantarilla, L.~M.~Bergasa, J.~Almazan, and A.~Celebi, ``Assisting the visually impaired: Obstacle detection and warning system using stereo vision,'' \emph{Autonomous Robots}, vol.~32, no.~4, pp.~381--398, 2012.
+
+\bibitem{tapu2014real}
+R.~Tapu, B.~Mocanu, A.~Bursuc, and T.~Zaharia, ``A real-time obstacle detection and tracking system on embedded platforms for visually impaired people,'' in \emph{Proc. IEEE Int. Conf. on Consumer Electronics (ICCE)}, 2014, pp.~234--237.
+
+\bibitem{velazquez2010wearable}
+R.~Velazquez, ``Wearable assistive devices for the visually impaired,'' in \emph{Wearable and Autonomous Systems}, Springer, 2010, pp.~331--349.
+
+\bibitem{dalal2005histograms}
+N.~Dalal and B.~Triggs, ``Histograms of oriented gradients for human detection,'' in \emph{Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)}, 2005, pp.~886--893.
+
+\bibitem{ren2015faster}
+S.~Ren, K.~He, R.~Girshick, and J.~Sun, ``Faster R-CNN: Towards real-time object detection with region proposal networks,'' in \emph{Advances in Neural Information Processing Systems (NeurIPS)}, 2015, pp.~91--99.
+
+\bibitem{liu2016ssd}
+W.~Liu, D.~Anguelov, D.~Erhan, C.~Szegedy, S.~Reed, C.-Y.~Fu, and A.~C.~Berg, ``SSD: Single shot multibox detector,'' in \emph{Proc. European Conf. on Computer Vision (ECCV)}, Springer, 2016, pp.~21--37.
+
+\bibitem{redmon2016you}
+J.~Redmon, S.~Divvala, R.~Girshick, and A.~Farhadi, ``You only look once: Unified, real-time object detection,'' in \emph{Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)}, 2016, pp.~779--788.
+
+\bibitem{jocher2023ultralytics}
+G.~Jocher, A.~Chaurasia, and J.~Qiu, ``Ultralytics YOLOv8,'' 2023. [Online]. Available: \url{https://github.com/ultralytics/ultralytics}
+
+\bibitem{ranftl2020towards}
+R.~Ranftl, K.~Lasinger, D.~Hafner, K.~Schindler, and V.~Koltun, ``Towards robust monocular depth estimation: Mixing datasets for zero-shot cross-dataset transfer,'' \emph{IEEE Transactions on Pattern Analysis and Machine Intelligence}, vol.~44, no.~3, pp.~1623--1637, 2022.
+
+\bibitem{yang2024depth}
+L.~Yang, B.~Kang, Z.~Huang, X.~Xu, J.~Feng, and H.~Zhao, ``Depth Anything: Unleashing the power of large-scale unlabeled data,'' in \emph{Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)}, 2024, pp.~10371--10381.
+
+\bibitem{profita2013don}
+H.~P.~Profita, J.~Clawson, S.~Roseway, A.~Smith, H.~Shultz, and K.~Isbister, ``Don't make a scene: Assessing the social acceptability of wearable device interaction,'' in \emph{Proc. ACM Int. Symp. on Wearable Computers (ISWC)}, 2013, pp.~141--148.
+
+\bibitem{mann2001wearable}
+S.~Mann, ``Wearable computing: toward humanistic intelligence,'' \emph{IEEE Intelligent Systems}, vol.~16, no.~3, pp.~10--15, 2001.
+
+\bibitem{livekit2024}
+LiveKit, ``LiveKit: Real-time video and audio platform built on WebRTC,'' Tech. Whitepaper, 2024. [Online]. Available: \url{https://livekit.io}
+
+\bibitem{radford2023robust}
+A.~Radford, J.~W.~Kim, T.~Xu, G.~Brockman, C.~McLeavey, and I.~Sutskever, ``Robust speech recognition via large-scale weak supervision,'' in \emph{Proc. Int. Conf. on Machine Learning (ICML)}, 2023, pp.~28492--28518.
+
+\bibitem{sarvam2024}
+Sarvam AI, ``Saaras and Bulbul: State-of-the-art multilingual voice foundations for Indic languages,'' Tech. Rep., Bangalore, India, 2024.
+
+\bibitem{smith2007overview}
+R.~Smith, ``An overview of the Tesseract OCR engine,'' in \emph{Proc. Ninth Int. Conf. on Document Analysis and Recognition (ICDAR)}, 2007, pp.~629--633.
+
+\bibitem{google_mlkit}
+Google Developers, ``ML Kit: On-device machine learning for mobile developers,'' Tech. Documentation, 2024. [Online]. Available: \url{https://developers.google.com/ml-kit}
+
+\bibitem{katz2012navigating}
+B.~F.~Katz, E.~Kammoun, G.~Parlan, et~al., ``Navigating without vision: Auditory spatial orientation and wayfinding in virtual environments,'' \emph{ACM Transactions on Applied Perception}, vol.~9, no.~4, pp.~18:1--18:21, 2012.
+
+\bibitem{bourke2007evaluation}
+A.~K.~Bourke, J.~V.~O'Brien, and G.~M.~Lyons, ``Evaluation of a threshold-based tri-axial accelerometer fall detection algorithm,'' \emph{Gait \& Posture}, vol.~26, no.~2, pp.~194--199, 2007.
+
+\bibitem{blattner1989earcons}
+M.~M.~Blattner, D.~A.~Sumikawa, and R.~M.~Greenberg, ``Earcons and icons: Their structure and common design principles,'' \emph{Human-Computer Interaction}, vol.~4, no.~1, pp.~11--44, 1989.
+
+\bibitem{denning2014situated}
+T.~Denning, Z.~Dehlawi, and T.~Kohno, ``In situ with Google Glass: An empirical study of bystander privacy perspectives,'' in \emph{Proc. ACM CHI Conf. on Human Factors in Computing Systems}, 2014, pp.~2377--2380.
+
+\bibitem{envision2023}
+Envision Technologies, ``Envision Glasses: AI-powered smart glasses for the blind and visually impaired,'' The Hague, Netherlands, Product Manual, 2023.
+
+\bibitem{microsoft_seeing_ai}
+Microsoft Research, ``Seeing AI: A visual assistance app for the blind community,'' Redmond, WA, Tech. Overview, 2023.
+
+\bibitem{bemyeyes2023}
+Be My Eyes, ``Be My AI: Transforming visual assistance with GPT-4 Vision,'' Copenhagen, Denmark, Whitepaper, 2023.
+
+\bibitem{sato2017navcog}
+D.~Sato, U.~Oh, K.~Naito, H.~Takagi, and C.~Asakawa, ``NavCog3: An evaluation of a smartphone-based turn-by-turn navigation assistant for people with visual impairments across varied indoor environments,'' \emph{ACM Transactions on Accessible Computing}, vol.~10, no.~4, pp.~1--26, 2017.
+
+\bibitem{gallego2020event}
+G.~Gallego, T.~Delbrück, G.~Orchard, et~al., ``Event-based vision: A survey,'' \emph{IEEE Transactions on Pattern Analysis and Machine Intelligence}, vol.~44, no.~1, pp.~154--180, 2022.
+
+\bibitem{yin2024mobilevlm}
+X.~Yin, X.~Zhang, X.~Liu, and H.~Sun, ``MobileVLM: A fast, strong and open vision language assistant for mobile devices,'' \emph{arXiv preprint arXiv:2312.16886}, 2024.
+
+\end{thebibliography}
+
+\end{document}

@@ -199,7 +199,11 @@ class DrishtiService : LifecycleService() {
 
         // Mode Manager Listener
         modeManager.addListener { _, newMode, spokenText ->
-            localTTS.speak(spokenText, flush = true)
+            // Prevent speech collision: if cloud voice agent is active, the agent already speaks the confirmation over WebRTC.
+            // Only speak locally via Android TTS if voice agent is disconnected or during emergency.
+            if (!isVoiceConnected || newMode is DrishtiMode.Emergency) {
+                localTTS.speak(spokenText, flush = true)
+            }
             // Broadcast mode change to LiveKit agent
             val packet = JSONObject().apply {
                 put("type", "MODE_CHANGE")
@@ -338,8 +342,8 @@ class DrishtiService : LifecycleService() {
             }
         }
 
-        // 2. Periodically dispatch camera frame to cloud agent (every 3.5s) for instant vision scene Q&A
-        if (now - lastFrameSendTimeMs >= 3500L) {
+        // 2. Periodically dispatch camera frame to cloud agent (every 2.0s) for instant vision scene Q&A
+        if (now - lastFrameSendTimeMs >= 2000L) {
             lastFrameSendTimeMs = now
             sendCameraFrameToAgent(bitmap)
         }
