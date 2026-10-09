@@ -1,0 +1,54 @@
+services:
+  # 1. Token Server (FastAPI)
+  - type: web
+    name: drishti-token-server
+    env: python
+    region: ohio # or any region closest to your users
+    plan: free
+    rootDir: token-server
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: LIVEKIT_URL
+        sync: false
+      - key: LIVEKIT_API_KEY
+        sync: false
+      - key: LIVEKIT_API_SECRET
+        sync: false
+
+  # 2. LiveKit Agent Worker
+  - type: worker
+    name: drishti-livekit-agent
+    env: python
+    region: ohio
+    plan: free
+    rootDir: agent
+    buildCommand: pip install -r requirements.txt
+    startCommand: python drishti_agent.py start
+    envVars:
+      - key: LIVEKIT_URL
+        sync: false
+      - key: LIVEKIT_API_KEY
+        sync: false
+      - key: LIVEKIT_API_SECRET
+        sync: false
+      - key: LLM_PROVIDER
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        sync: false
+      - key: SARVAM_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_BASE_URL
+        sync: false
+      - key: OPENAI_MODEL
+        sync: false
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: GOOGLE_MAPS_API_KEY
+        sync: false
+      - key: DEFAULT_AGENT_MODE
+        value: assistant

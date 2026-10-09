@@ -39,7 +39,7 @@ class PreferenceManager(context: Context) {
         set(value) = prefs.edit().putString(KEY_LIVEKIT_SERVER_URL, value.trim()).apply()
 
     var esp32IpAddress: String
-        get() = prefs.getString(KEY_ESP32_IP, "192.168.4.1") ?: "192.168.4.1"
+        get() = prefs.getString(KEY_ESP32_IP, "10.131.108.8") ?: "10.131.108.8"
         set(value) = prefs.edit().putString(KEY_ESP32_IP, value.trim()).apply()
 
     var tokenServerUrl: String

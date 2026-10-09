@@ -140,9 +140,17 @@ class MainActivity : AppCompatActivity() {
         binding.cardCameraStatus.setOnClickListener {
             showCameraSelectionDialog()
         }
+        binding.cardCameraStatus.setOnLongClickListener {
+            showEsp32ConfigDialog()
+            true
+        }
 
         binding.cardCameraViewport.setOnClickListener {
             showCameraSelectionDialog()
+        }
+        binding.cardCameraViewport.setOnLongClickListener {
+            showEsp32ConfigDialog()
+            true
         }
 
         binding.btnEmergencySOS.setOnClickListener {
@@ -389,6 +397,38 @@ class MainActivity : AppCompatActivity() {
                     updateCameraDisplay(targetSource, isActive = false)
                 }
                 Toast.makeText(this, "Camera selected: ${targetSource.shortName}", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun showEsp32ConfigDialog() {
+        val prefManager = drishtiService?.preferenceManager ?: ai.drishti.utils.PreferenceManager(this)
+        val currentIp = prefManager.esp32IpAddress
+
+        val input = android.widget.EditText(this).apply {
+            setText(currentIp)
+            hint = "10.131.108.8"
+            setSingleLine()
+            setPadding(40, 30, 40, 30)
+        }
+
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+            .setTitle("ESP32-CAM IP Address")
+            .setMessage("Enter the IP address of your ESP32 camera:")
+            .setView(input)
+            .setPositiveButton("Save & Connect") { _, _ ->
+                val newIp = input.text.toString().trim()
+                if (newIp.isNotEmpty()) {
+                    prefManager.esp32IpAddress = newIp
+                    Toast.makeText(this, "Camera IP updated to $newIp", Toast.LENGTH_SHORT).show()
+                    val service = drishtiService
+                    if (service != null && service.isRunning) {
+                        prefManager.useEsp32Camera = true
+                        service.cameraManager.switchToSource(CameraSource.ESP32_WIFI, newIp)
+                        updateCameraDisplay(CameraSource.ESP32_WIFI, isActive = true)
+                    }
+                }
             }
             .setNegativeButton("Cancel", null)
             .show()

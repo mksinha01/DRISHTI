@@ -386,7 +386,7 @@ async def entrypoint(ctx: JobContext) -> None:
 
     @ctx.room.on("data_received")
     def on_data_received(data_packet: rtc.DataPacket):
-        nonlocal latest_camera_frame, current_agent_mode
+        nonlocal latest_camera_frame
         try:
             raw_text = data_packet.data.decode("utf-8")
             payload = json.loads(raw_text)

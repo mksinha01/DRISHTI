@@ -9,6 +9,8 @@ import okhttp3.Request
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.util.concurrent.TimeUnit
+import java.net.NetworkInterface
+import java.net.Inet4Address
 
 /**
  * Connects to the ESP32-CAM HTTP MJPEG stream at http://<ip>/stream.
@@ -35,7 +37,23 @@ class Esp32StreamClient(
         isStreaming = true
 
         streamJob = scope.launch(Dispatchers.IO) {
-            val cleaned = esp32Ip.trim().removeSuffix("/")
+            var cleaned = esp32Ip.trim().removeSuffix("/")
+            
+            // Try auto-discovery if default/provided IP is unreachable
+            try {
+                val checkUrl = if (cleaned.startsWith("http")) "$cleaned/status" else "http://$cleaned/status"
+                val req = Request.Builder().url(checkUrl).build()
+                val checkClient = OkHttpClient.Builder().connectTimeout(1, TimeUnit.SECONDS).build()
+                val res = checkClient.newCall(req).execute()
+                if (!res.isSuccessful) throw Exception("Unreachable")
+            } catch (e: Exception) {
+                Log.w(tag, "IP $cleaned unreachable. Scanning subnet automatically...")
+                val discovered = autoDiscoverEsp32Ip()
+                if (discovered != null) {
+                    cleaned = discovered
+                }
+            }
+
             val url = when {
                 cleaned.endsWith("/stream") -> if (cleaned.startsWith("http://") || cleaned.startsWith("https://")) cleaned else "http://$cleaned"
                 cleaned.startsWith("http://") || cleaned.startsWith("https://") -> "$cleaned/stream"
@@ -107,5 +125,55 @@ class Esp32StreamClient(
         streamJob?.cancel()
         streamJob = null
         Log.i(tag, "ESP32 MJPEG stream stopped.")
+    }
+
+    private suspend fun autoDiscoverEsp32Ip(): String? = withContext(Dispatchers.IO) {
+        try {
+            var localIp: String? = null
+            val interfaces = NetworkInterface.getNetworkInterfaces()
+            while (interfaces.hasMoreElements()) {
+                val iface = interfaces.nextElement()
+                if (iface.isLoopback || !iface.isUp) continue
+                val addresses = iface.inetAddresses
+                while (addresses.hasMoreElements()) {
+                    val addr = addresses.nextElement()
+                    if (addr is Inet4Address) {
+                        localIp = addr.hostAddress
+                        break
+                    }
+                }
+                if (localIp != null) break
+            }
+
+            if (localIp != null && localIp.contains(".")) {
+                val prefix = localIp.substringBeforeLast(".")
+                val deferreds = (1..254).map { i ->
+                    async {
+                        val testIp = "$prefix.$i"
+                        if (testIp == localIp) return@async null
+                        try {
+                            val request = Request.Builder().url("http://$testIp/status").build()
+                            val scanClient = OkHttpClient.Builder()
+                                .connectTimeout(800, TimeUnit.MILLISECONDS)
+                                .readTimeout(800, TimeUnit.MILLISECONDS)
+                                .build()
+                            val response = scanClient.newCall(request).execute()
+                            if (response.isSuccessful && response.body?.string()?.contains("\"status\":\"online\"") == true) {
+                                return@async testIp
+                            }
+                        } catch (e: Exception) {}
+                        null
+                    }
+                }
+                val foundIp = deferreds.awaitAll().firstOrNull { it != null }
+                if (foundIp != null) {
+                    Log.i(tag, "Auto-discovered ESP32 at $foundIp")
+                    return@withContext foundIp
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(tag, "Auto-discovery failed", e)
+        }
+        null
     }
 }

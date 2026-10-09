@@ -154,14 +154,14 @@ void setup() {
     config.xclk_freq_hz = 20000000;
     config.pixel_format = PIXFORMAT_JPEG;
 
-    // Use SVGA or VGA for optimal balance of resolution and framerate
+    // Use XGA or SVGA for optimal balance of resolution and framerate
     if (psramFound()) {
-        config.frame_size = FRAMESIZE_VGA; // 640x480
-        config.jpeg_quality = 12;          // 0-63 (lower is better quality)
+        config.frame_size = FRAMESIZE_XGA; // 1024x768 for good quality
+        config.jpeg_quality = 10;          // 0-63 (lower is better quality)
         config.fb_count = 2;
     } else {
-        config.frame_size = FRAMESIZE_QVGA; // 320x240
-        config.jpeg_quality = 14;
+        config.frame_size = FRAMESIZE_SVGA; // 800x600 fallback
+        config.jpeg_quality = 12;
         config.fb_count = 1;
     }
 

@@ -352,10 +352,10 @@ class DrishtiService : LifecycleService() {
     private fun sendCameraFrameToAgent(bitmap: Bitmap) {
         if (!::liveKitClient.isInitialized || !liveKitClient.isConnected) return
         try {
-            // Downscale to 480x360 with 55% JPEG compression for low latency WebRTC transfer (~15-20KB)
-            val scaled = Bitmap.createScaledBitmap(bitmap, 480, 360, true)
+            // Downscale to 320x240 with 40% JPEG compression for low latency WebRTC transfer (<15KB) to prevent data channel limits
+            val scaled = Bitmap.createScaledBitmap(bitmap, 320, 240, true)
             val stream = ByteArrayOutputStream()
-            scaled.compress(Bitmap.CompressFormat.JPEG, 55, stream)
+            scaled.compress(Bitmap.CompressFormat.JPEG, 40, stream)
             val base64 = Base64.encodeToString(stream.toByteArray(), Base64.NO_WRAP)
             val packet = JSONObject().apply {
                 put("type", "CAMERA_FRAME")
